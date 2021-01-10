@@ -9,3 +9,6 @@
  **/
 
 //BUILDIN_DEF(example,""),
+BUILDIN_DEF(getstorageitem,"vi?"),
+BUILDIN_DEF(getstorageitem2,"viiiiiiii?"),
+BUILDIN_DEF2(getstorageitem2,"getstorageitem3","viiiiiiiirrr?"),
