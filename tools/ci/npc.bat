@@ -27,7 +27,10 @@ for /R . %%f in (*.txt) do (
 	rem store relative path for compare
 	set R=!B:%C%\=!
 
-	echo npc: npc\custom\!R!>>!OUT!
+	rem all except the battleground scripts
+	if "!R:~0,12!" neq "battleground" (
+		echo npc: npc\custom\!R!>>!OUT!
+	)
 )
 
 rem switch to the test folder

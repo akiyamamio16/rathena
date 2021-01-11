@@ -9485,32 +9485,6 @@ Example:
 
 ---------------------------------------
 
-*bg_reserve("<battleground_map_name>"{,<ended>});
-
-Reserves a Battleground map for the Battleground UI System. When a map is booked it prevents another similar
-queue from being created and will allow players to join an active Battlegrounds event.
-
-If <ended> is true, then the Battleground is marked as over to prevent new players from joining. This state is meant
-for the period where players can get their Badges.
-
----------------------------------------
-
-*bg_unbook("<battleground_map_name>");
-
-Removes a Battleground map for the Battleground UI System. When a map is unbooked it allows a queue to be created.
-
----------------------------------------
-
-*bg_desert({<char_id>});
-
-Same as 'bg_leave' but slaps the player with a deserter status so they can't enter another queue for the time
-defined in battleground_db (10 minutes by default).
-
-With the Battleground Queue System, it will also warp the player to their previous position when they joined or
-to their save point if the map had MF_NOSAVE.
-
----------------------------------------
-
 *bg_warp <Battle Group>,"<map name>",<x>,<y>;
 
 Similar to the 'warp' command.
@@ -9614,21 +9588,6 @@ map within the specified rectangular area.
 This command will force the update of the displayed scoreboard.
 It is only usable when the map is defined as a Type 2 Battleground:
 mapflag	<map name>	battleground	2
-
----------------------------------------
-
-*bg_info("<battleground name>", <type>);
-
-Retrieves data related to given <battleground name> from the database. Requires feature.bgqueue
-to be enabled. <Type> can be one of the following:
-
-	BG_INFO_ID: Battleground ID.
-	BG_INFO_REQUIRED_PLAYERS: Required players to start a battleground (per side).
-	BG_INFO_MAX_PLAYERS: Maximum players allowed in a battleground.
-	BG_INFO_MIN_LEVEL: Minimum level allowed to join a battleground.
-	BG_INFO_MAX_LEVEL: Maximum level allowed to join a battleground.
-	BG_INFO_MAPS: Number of maps in a battleground. Stores an array of map names in @bgmaps[] and a count in @bgmapscount.
-	BG_INFO_DESERTER_TIME: Amount of time in seconds a player is marked deserter.
 
 ---------------------------------------
 

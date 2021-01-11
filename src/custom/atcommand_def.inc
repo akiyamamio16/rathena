@@ -9,3 +9,8 @@
  **/
 
 //ACMD_DEF(newcommand),
+	ACMD_DEF(listenbg),
+	ACMD_DEF(order),
+	ACMD_DEF(leader),
+	ACMD_DEF(reportafk),
+	ACMD_DEF(bgskill),

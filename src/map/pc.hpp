@@ -4,7 +4,6 @@
 #ifndef PC_HPP
 #define PC_HPP
 
-#include <memory>
 #include <vector>
 
 #include "../common/cbasetypes.hpp"
@@ -13,7 +12,6 @@
 #include "../common/strlib.hpp"// StringBuf
 #include "../common/timer.hpp"
 
-#include "battleground.hpp"
 #include "buyingstore.hpp" // struct s_buyingstore
 #include "clif.hpp" //e_wip_block
 #include "itemdb.hpp" // MAX_ITEMGROUP
@@ -334,6 +332,10 @@ struct map_session_data {
 		bool mail_writing; // Whether the player is currently writing a mail in RODEX or not
 		bool cashshop_open;
 		bool sale_open;
+		// Battleground eAmod
+		unsigned bg_afk : 1;
+		unsigned int bg_listen : 1;
+		unsigned int only_walk : 1;
 		unsigned int block_action : 10;
 	} state;
 	struct {
@@ -686,10 +688,16 @@ struct map_session_data {
 	int debug_line;
 	const char* debug_func;
 
-	// Battlegrounds queue system [MasterOfMuppets]
-	int bg_id, bg_queue_id;
-	int tid_queue_active; ///< Timer ID associated with players joining an active BG
-
+	//======================
+	// Battleground eAmod
+	//======================
+	struct battleground_data *bmaster_flag;
+	unsigned short bg_kills; // Battleground Kill Count
+	struct queue_data *qd;
+	// Battleground and Queue System
+	unsigned short bg_team;
+	//======================
+	unsigned int bg_id;
 #ifdef SECURE_NPCTIMEOUT
 	/**
 	 * ID of the timer
@@ -1360,9 +1368,6 @@ struct sg_data {
 };
 extern const struct sg_data sg_info[MAX_PC_FEELHATE];
 
-void pc_set_bg_queue_timer(map_session_data *sd);
-void pc_delete_bg_queue_timer(map_session_data *sd);
-
 void pc_setinvincibletimer(struct map_session_data* sd, int val);
 void pc_delinvincibletimer(struct map_session_data* sd);
 
@@ -1445,6 +1450,8 @@ void pc_show_questinfo(struct map_session_data *sd);
 void pc_show_questinfo_reinit(struct map_session_data *sd);
 
 bool pc_job_can_entermap(enum e_job jobid, int m, int group_lv);
+
+int pc_update_last_action(struct map_session_data *sd);
 
 #if defined(RENEWAL_DROP) || defined(RENEWAL_EXP)
 uint16 pc_level_penalty_mod( struct map_session_data* sd, e_penalty_type type, struct mob_db* mob, mob_data* md = nullptr );
