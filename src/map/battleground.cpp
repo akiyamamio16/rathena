@@ -12,6 +12,7 @@
 #include "../common/timer.hpp"
 #include "../common/utils.hpp"
 
+#include "achievement.hpp"
 #include "battle.hpp"
 #include "clif.hpp"
 #include "elemental.hpp"
@@ -176,6 +177,9 @@ int bg_team_clean(int bg_id, bool remove)
 		sd->bmaster_flag = NULL;
 		bg_member_removeskulls(sd);
 		
+		if (battle_config.bg_team_color && sd->bg_color)
+			pc_changelook(sd,LOOK_CLOTHES_COLOR,sd->bg_color-1);
+		
 		// Remove Guild Skill Buffs
 		status_change_end(&sd->bl,SC_GUILDAURA,INVALID_TIMER);
 		status_change_end(&sd->bl,SC_BATTLEORDERS,INVALID_TIMER);
@@ -191,6 +195,7 @@ int bg_team_clean(int bg_id, bool remove)
 			clif_guild_allianceinfo(sd);
 			clif_guild_memberlist(sd);
 			clif_guild_skillinfo(sd);
+			clif_guild_emblem(sd, g);
 		}
 		else
 			clif_bg_leave_single(sd, sd->status.name, "Leaving Battleground...");
@@ -247,6 +252,8 @@ int bg_team_warp(int bg_id, unsigned short mapindex, short x, short y)
 { // Warps a Team
 	int i;
 	struct battleground_data *bg = bg_team_search(bg_id);
+	struct map_session_data *sd;
+	unsigned short m = mapindex_name2idx("bat_room", nullptr);
 
 	if( bg == NULL )
 		return 0;
@@ -257,8 +264,18 @@ int bg_team_warp(int bg_id, unsigned short mapindex, short x, short y)
 		y = bg->y;
 	}
 	
-	for( i = 0; i < MAX_BG_MEMBERS; i++ )
-		if( bg->members[i].sd != NULL ) pc_setpos(bg->members[i].sd, mapindex, x, y, CLR_TELEPORT);
+	for( i = 0; i < MAX_BG_MEMBERS; i++ ) {
+		if( (sd = bg->members[i].sd) == NULL )
+ 			continue;
+		if (mapindex == 2000) {
+			if (sd->bgentry.mapid)
+				pc_setpos(sd, sd->bgentry.mapid, sd->bgentry.x, sd->bgentry.y, CLR_TELEPORT);
+			else
+				pc_setpos(sd, m, 155, 150, CLR_TELEPORT);
+			continue;
+		}
+		pc_setpos(sd, mapindex, x, y, CLR_TELEPORT);
+	}
 	return 1;
 }
 
@@ -277,6 +294,67 @@ int bg_reveal_pos(struct block_list *bl, va_list ap)
 
 	clif_viewpoint(pl_sd,sd->bl.id,flag,sd->bl.x,sd->bl.y,sd->bl.id,color);
 	return 0;
+}
+
+int bg_team_sub_count(struct block_list *bl, va_list ap)
+{
+	struct map_session_data *sd = (TBL_PC *)bl;
+
+	if (sd->state.autotrade)
+		return 0;
+
+	return 1;
+}
+
+/// Executes 'func' for each party member on the same map and in range (0:whole map)
+int bg_team_foreachsamemap(int (*func)(struct block_list*,va_list),struct map_session_data *sd,int range,...)
+{
+	struct battleground_data *bg;
+	int i;
+	int x0,y0,x1,y1;
+	struct block_list *list[MAX_BG_MEMBERS];
+	int blockcount=0;
+	int total = 0; //Return value.
+
+	nullpo_ret(sd);
+
+	if((bg = bg_team_search(sd->bg_id)) == NULL)
+		return 0;
+
+	x0 = sd->bl.x-range;
+	y0 = sd->bl.y-range;
+	x1 = sd->bl.x+range;
+	y1 = sd->bl.y+range;
+
+	for(i = 0; i < MAX_BG_MEMBERS; i++) {
+		struct map_session_data *pl_sd = bg->members[i].sd;
+
+		if(!pl_sd)
+			continue;
+
+		if(pl_sd->bl.m!=sd->bl.m || !pl_sd->bl.prev)
+			continue;
+
+		if(range &&
+			(pl_sd->bl.x<x0 || pl_sd->bl.y<y0 ||
+			 pl_sd->bl.x>x1 || pl_sd->bl.y>y1 ) )
+			continue;
+
+		list[blockcount++]=&pl_sd->bl;
+	}
+
+	map_freeblock_lock();
+
+	for(i = 0; i < blockcount; i++) {
+		va_list ap;
+		va_start(ap, range);
+		total += func(list[i], ap);
+		va_end(ap);
+	}
+
+	map_freeblock_unlock();
+
+	return total;
 }
 
 int bg_send_dot_remove(struct map_session_data *sd) {
@@ -310,6 +388,9 @@ int bg_team_join(int bg_id, struct map_session_data *sd)
  	sd->bg_id = bg_id;
 	sd->bg_kills = 0;
 	sd->state.bg_afk = 0;
+	sd->bgentry.mapid = 0;
+	sd->bgentry.x = 0;
+	sd->bgentry.y = 0;
 	bgd->members[i].sd = sd;
 	bgd->members[i].x = sd->bl.x;
 	bgd->members[i].y = sd->bl.y;
@@ -332,6 +413,17 @@ int bg_team_join(int bg_id, struct map_session_data *sd)
 		skill_blockpc_clear(sd);
  	}
 	
+	if (battle_config.bg_team_color && bgd->g->ccolor) {
+		sd->bg_color = sd->status.clothes_color+1;
+		pc_changelook(sd,LOOK_CLOTHES_COLOR,bgd->g->ccolor);
+	}
+
+	if (battle_config.bg_join_location && !map_getmapflag(sd->bl.m, MF_NOWARP)) {
+		sd->bgentry.mapid = sd->mapindex;
+		sd->bgentry.x = sd->bl.x;
+		sd->bgentry.y = sd->bl.y;
+	}
+	
 	for (i = 0; i < MAX_BG_MEMBERS; i++)
 	{
 		if ((pl_sd = bgd->members[i].sd) == NULL)
@@ -352,6 +444,8 @@ int bg_team_join(int bg_id, struct map_session_data *sd)
 
 	clif_bg_hp(sd);
 	clif_bg_xy(sd);
+	if (battle_config.bg_queue_interface)
+		clif_bg_queue_entry_init(sd);
 	return 1;
 }
 
@@ -379,6 +473,9 @@ int bg_team_leave(struct map_session_data *sd, int flag)
 	sd->state.bg_afk = 0;
 	sd->bmaster_flag = NULL;
 	bg_member_removeskulls(sd);
+	
+	if (battle_config.bg_team_color && sd->bg_color)
+		pc_changelook(sd,LOOK_CLOTHES_COLOR,sd->bg_color-1);
 	
 	// Remove Guild Skill Buffs
 	status_change_end(&sd->bl, SC_GUILDAURA, INVALID_TIMER);
@@ -686,18 +783,21 @@ void bg_guild_build_data(void)
 	strncpy(bg_guild[0].master, "General Guillaume", NAME_LENGTH);
 	strncpy(bg_guild[0].position[0].name, "Blue Team Leader", NAME_LENGTH);
 	strncpy(bg_guild[0].position[1].name, "Blue Team", NAME_LENGTH);
+	bg_guild[0].ccolor = battle_config.bg_team_ccolor_blue;
 
 	// Guild Data - Croix
 	strncpy(bg_guild[1].name, "Red Team", NAME_LENGTH);
 	strncpy(bg_guild[1].master, "Prince Croix", NAME_LENGTH);
 	strncpy(bg_guild[1].position[0].name, "Red Team Leader", NAME_LENGTH);
 	strncpy(bg_guild[1].position[1].name, "Red Team", NAME_LENGTH);
+	bg_guild[1].ccolor = battle_config.bg_team_ccolor_red;
 
 	// Guild Data - Traitors
 	strncpy(bg_guild[2].name, "Green Team", NAME_LENGTH);
 	strncpy(bg_guild[2].master, "Mercenary", NAME_LENGTH);
 	strncpy(bg_guild[2].position[0].name, "Green Team Leader", NAME_LENGTH);
 	strncpy(bg_guild[2].position[1].name, "Green Team", NAME_LENGTH);
+	bg_guild[2].ccolor = battle_config.bg_team_ccolor_green;
 }
 
 void bg_team_getitem(int bg_id, int nameid, int amount)
@@ -794,6 +894,60 @@ void bg_team_rewards(int bg_id, int nameid, int amount, int kafrapoints, int que
 		{
 			if ((flag = pc_additem(sd, &it, amount, LOG_TYPE_SCRIPT)))
 				clif_additem(sd, 0, 0, flag);
+		}
+		// Extended Features BG [Easycore]
+		achievement_update_objective(sd, AG_BG_DAMAGE, 1, sd->status.bgstats.damage_done);
+		switch( bg_result ) {
+			case 0: // Won
+				add2limit(sd->status.bgstats.win,1,USHRT_MAX);
+				achievement_update_objective(sd, AG_BG_WIN, 1, 1);
+				if( sd->bmaster_flag )
+					add2limit(sd->status.bgstats.leader_win,1,USHRT_MAX);
+				switch( bg_arena ) {
+					case 0: add2limit(sd->status.bgstats.eos_wins,1,USHRT_MAX); break;
+					case 1: add2limit(sd->status.bgstats.boss_wins,1,USHRT_MAX); break;
+					case 2: add2limit(sd->status.bgstats.ti_wins,1,USHRT_MAX); break;
+					case 3: add2limit(sd->status.bgstats.ctf_wins,1,USHRT_MAX); break;
+					case 4: add2limit(sd->status.bgstats.td_wins,1,USHRT_MAX); break;
+					case 5: add2limit(sd->status.bgstats.sc_wins,1,USHRT_MAX); break;
+					case 6: add2limit(sd->status.bgstats.cq_wins,1,USHRT_MAX); break;
+					case 7: add2limit(sd->status.bgstats.ru_wins,1,USHRT_MAX); break;
+					case 8: add2limit(sd->status.bgstats.dom_wins,1,USHRT_MAX); break;
+				}
+				break;
+			case 1: // Tie
+				add2limit(sd->status.bgstats.tie,1,USHRT_MAX);
+				achievement_update_objective(sd, AG_BG_TIE, 1, 1);
+				if( sd->bmaster_flag )
+					add2limit(sd->status.bgstats.leader_tie,1,USHRT_MAX);
+				switch( bg_arena ) {
+					case 0: add2limit(sd->status.bgstats.eos_tie,1,USHRT_MAX); break;
+					case 1: add2limit(sd->status.bgstats.boss_tie,1,USHRT_MAX); break;
+					case 2: add2limit(sd->status.bgstats.ti_tie,1,USHRT_MAX); break;
+					case 3: add2limit(sd->status.bgstats.ctf_tie,1,USHRT_MAX); break;
+					case 4: add2limit(sd->status.bgstats.td_tie,1,USHRT_MAX); break;
+					case 5: add2limit(sd->status.bgstats.sc_tie,1,USHRT_MAX); break;
+					// No Tie for Conquest or Rush
+					case 8: add2limit(sd->status.bgstats.dom_tie,1,USHRT_MAX); break;
+				}
+				break;
+			case 2: // Lost
+				add2limit(sd->status.bgstats.lost,1,USHRT_MAX);
+				achievement_update_objective(sd, AG_BG_LOSE, 1, 1);
+				if( sd->bmaster_flag )
+					add2limit(sd->status.bgstats.leader_lost,1,USHRT_MAX);
+				switch( bg_arena ) {
+					case 0: add2limit(sd->status.bgstats.eos_lost,1,USHRT_MAX); break;
+					case 1: add2limit(sd->status.bgstats.boss_lost,1,USHRT_MAX); break;
+					case 2: add2limit(sd->status.bgstats.ti_lost,1,USHRT_MAX); break;
+					case 3: add2limit(sd->status.bgstats.ctf_lost,1,USHRT_MAX); break;
+					case 4: add2limit(sd->status.bgstats.td_lost,1,USHRT_MAX); break;
+					case 5: add2limit(sd->status.bgstats.sc_lost,1,USHRT_MAX); break;
+					case 6: add2limit(sd->status.bgstats.cq_lost,1,USHRT_MAX); break;
+					case 7: add2limit(sd->status.bgstats.ru_lost,1,USHRT_MAX); break;
+					case 8: add2limit(sd->status.bgstats.dom_lost,1,USHRT_MAX); break;
+				}
+				break;
 		}
 	}
 }
@@ -1010,6 +1164,11 @@ int bg_queue_join(struct map_session_data *sd, int q_id)
 	sprintf(output, "You have joined %s queue at position %d.", qd->queue_name, i);
 	clif_displaymessage(sd->fd, output);
 	
+	if (battle_config.bg_queue_interface) {
+		clif_bg_queue_apply_result(BG_APPLY_ACCEPT, qd->queue_name, sd);
+		clif_bg_queue_apply_notify(qd->queue_name, sd);
+	}
+	
 	if (qd->join_event[0]) npc_event_do(qd->join_event);
 	return 1;
 }
@@ -1030,6 +1189,9 @@ int bg_queue_leave(struct map_session_data *sd, int q_id)
 	}
 	sprintf(output,"You have been removed from the %s queue.", qd->queue_name);
 	clif_displaymessage(sd->fd, output);
+	
+	//if (battle_config.bg_queue_interface)
+	//	clif_bg_queue_entry_init(sd);
 
 	return 1;
 }
@@ -1043,6 +1205,8 @@ void bg_queue_leaveall(struct map_session_data *sd)
 		bg_queue_member_remove(qd,sd->bl.id);
 		sprintf(output,"You have been removed from %s BG Queue.",qd->queue_name);
 		clif_displaymessage(sd->fd, output);
+		//if (battle_config.bg_queue_interface)
+		//	clif_bg_queue_entry_init(sd);
 	}
 }
 

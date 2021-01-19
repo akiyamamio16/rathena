@@ -1395,6 +1395,9 @@ void initChangeTables(void)
 	StatusIconChangeTable[SC_EP16_2_BUFF_SC] = EFST_EP16_2_BUFF_SC;
 	StatusIconChangeTable[SC_EP16_2_BUFF_AC] = EFST_EP16_2_BUFF_AC;
 
+	// Battleground Queue
+	StatusIconChangeTable[SC_ENTRY_QUEUE_APPLY_DELAY] = EFST_ENTRY_QUEUE_APPLY_DELAY;
+	
 	/* Other SC which are not necessarily associated to skills */
 	StatusChangeFlagTable[SC_ASPDPOTION0] |= SCB_ASPD;
 	StatusChangeFlagTable[SC_ASPDPOTION1] |= SCB_ASPD;
@@ -1551,6 +1554,9 @@ void initChangeTables(void)
 	StatusChangeFlagTable[SC_GLASTHEIM_ITEMDEF] |= SCB_DEF|SCB_MDEF;
 	StatusChangeFlagTable[SC_GLASTHEIM_HPSP] |= SCB_MAXHP|SCB_MAXSP;
 
+	// Battleground Queue
+	StatusChangeFlagTable[SC_ENTRY_QUEUE_APPLY_DELAY] |= SCB_NONE;
+	
 	// Summoner
 	StatusChangeFlagTable[SC_DORAM_WALKSPEED] |= SCB_SPEED;
 	StatusChangeFlagTable[SC_DORAM_MATK] |= SCB_MATK;
@@ -2024,6 +2030,9 @@ int status_damage(struct block_list *src,struct block_list *target,int64 dhp, in
 		case BL_ELEM: elemental_heal((TBL_ELEM*)target,hp,sp); break;
 	}
 
+	// Extended Features BG
+	pc_record_damage(src,target,hp);
+	
 	if( src && target->type == BL_PC && ((TBL_PC*)target)->disguise ) { // Stop walking when attacked in disguise to prevent walk-delay bug
 		unit_stop_walking( target, 1 );
 	}
@@ -10145,6 +10154,7 @@ int status_change_start(struct block_list* src, struct block_list* bl,enum sc_ty
 			case SC_LHZ_DUN_N4:
 			case SC_FLASHKICK:
 			case SC_SOULUNITY:
+			case SC_ENTRY_QUEUE_APPLY_DELAY:
 				break;
 			case SC_GOSPEL:
 				 // Must not override a casting gospel char.

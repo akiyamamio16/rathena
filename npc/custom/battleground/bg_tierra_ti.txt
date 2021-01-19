@@ -16,6 +16,90 @@
 // BattleGround System - Tierra Triple Infierno
 // ==============================================================================
 
+// Battleground Queue Engine
+// *********************************************************************
+-	script	TI_BG_Queue	-1,{
+	end;
+	
+OnInit:
+	// Configuration
+	.Num = 4;
+	sleep 1;
+	set .BG_Queue, bg_queue_create("Triple Inferno",strnpcinfo(0)+"::OnJoinEvent",getvariableofnpc(.BG_level[.Num],"BG_Queue_Join"));
+	.BG_Name$ = getvariableofnpc(.BG_Names$[.Num],"BG_Queue_Join");
+	.BG_Arena$ = getvariableofnpc(.BG_Arenas$[.Num],"BG_Queue_Join");
+	.BG_Min = getvariableofnpc(.BG_Min[.Num],"BG_Queue_Join");
+	.BG_Max = getvariableofnpc(.BG_Max[.Num],"BG_Queue_Join");
+	.TeamMode = getvariableofnpc(.TeamMode,"BG_Queue_Join");
+	end;
+	
+	
+OnJoinBG:
+	if (getcharid(6) == .BG_Queue)
+		end;
+	if (getbattleflag("bg_queue_interface") == 0) {
+		message strcharinfo(0),"Queue UI are currently disabled.";
+		end;
+	} else if (getbattleflag("bg_eAmod_mode") == 0) {
+		message strcharinfo(0),"Battlegrounds are currently disabled.";
+		end;
+	} else if( agitcheck() || agitcheck2() ) {
+		dispbottom "[Battleground is currently disabled for this moment due to War of Emperium.]";
+		end;
+	} else if (!getvariableofnpc(.Is_Enabled[.Num],"BG_Queue_Join")) {
+		message strcharinfo(0),"This arena is currently disabled.";
+		end;
+	} else if (getstatus(SC_ENTRY_QUEUE_APPLY_DELAY,0)) {
+		dispbottom "[You are a Deserter. Time remaining: "+(getstatus(SC_ENTRY_QUEUE_APPLY_DELAY,5)/1000)+" seconds]";
+		end;
+	}
+	if (getcharid(6))
+		bg_queue_leaveall();
+	$@BG_User_Min = .BG_Min*3;
+	bg_queue_join .BG_Queue;
+	end;
+OnDoLeave: // @leavebg
+	bg_queue_leave .BG_Queue;
+	end;
+
+OnJoinEvent:
+	if( $@BG_Status_TI == 2 )
+		end; // BG Ending... Must wait until OnRotate is called
+
+	set .@Queue_Count, bg_queue_data(.BG_Queue,0);
+	switch( $@BG_Status_TI ) {
+		case 0: // Idle - Ready to Start
+
+			if( bg_queue_checkstart(.BG_Queue,.TeamMode,3,.BG_Min) ) {
+				donpcevent .BG_Arena$+"::OnBuildTeams";
+
+				// Fill Teams with Queue Members
+				bg_queue2teams .BG_Queue,.BG_Min,.BG_Max,.TeamMode,$@BG_TI_Team1,$@BG_TI_Team2,$@BG_TI_Team3;
+
+				set $@BG_Status_TI,1;
+				set .@msg$, "Battleground -- " + .BG_Name$ + " -- Begining";
+				bgannounce .@msg$,getvariableofnpc(.BG_Color$[.Num],"BG_Queue_Join");
+
+				donpcevent .BG_Arena$+"::OnReady";
+			} else {
+				set .@msg$, "Battleground -- " + .BG_Name$ + " -- " + (.BG_Min*3 - .@Queue_Count) + " more players to start.";
+				bgannounce .@msg$,getvariableofnpc(.BG_Color$[.Num],"BG_Queue_Join");
+			}
+			break;
+		case 1: // Running - Others can join
+			if( .@Queue_Count > 0 ) {
+				bg_balance_teams .BG_Queue,.BG_Max,.TeamMode,$@BG_TI_Team1,$@BG_TI_Team2,$@BG_TI_Team3;
+				set .@BG_Count1, bg_get_data($@BG_TI_Team1,0);
+				set .@BG_Count2, bg_get_data($@BG_TI_Team2,0);
+				set .@BG_Count3, bg_get_data($@BG_TI_Team3,0);
+				set .@msg$, "Battleground -- " + .BG_Name$ + " -- B: " + .@BG_Count1 + "/" + .BG_Max + ", R: " + .@BG_Count2 + "/" + .BG_Max + ", G: " + .@BG_Count3 + "/" + .BG_Max + " (Playing)";
+
+				bgannounce .@msg$,getvariableofnpc(.BG_Color$[.Num],"BG_Queue_Join");
+			}
+			break;
+	}
+	end;
+}
 // Battleground Engine
 // *********************************************************************
 
@@ -29,20 +113,32 @@ OnInit:
 	setwall "region_8",25,46,8,0,0,"ti_wall_b2";
 	setwall "region_8",85,46,8,0,0,"ti_wall_c";
 	setwall "region_8",74,46,8,0,0,"ti_wall_c2";
+	if (getbattleflag("bg_queue_interface")) {
+		.T1$ = "$@BG_TI_Team1";
+		.T2$ = "$@BG_TI_Team2";
+		.T3$ = "$@BG_TI_Team3";
+	} else {
+		.T1$ = "$@BG_Team1";
+		.T2$ = "$@BG_Team2";
+		.T3$ = "$@BG_Team3";
+	}
 	end;
 
 OnTeam1Quit:
 OnTeam2Quit:
 OnTeam3Quit:
-	setquest 8600; // Deserter
-	if ($@BG_Status != 0 && getvariableofnpc(.BG_Arena$,"BG_Queue_Join") == "Tierra_TI")
+	sc_start(SC_ENTRY_QUEUE_APPLY_DELAY,getvariableofnpc(.DeserterCD,"BG_Queue_Join"),0); // Deserter
+	if (getbattleflag("bg_queue_interface") && $@BG_Status_TI != 0)
+		donpcevent "TI_BG_Queue::OnJoinEvent";
+	if (!getbattleflag("bg_queue_interface") && $@BG_Status != 0 && getvariableofnpc(.BG_Arena$,"BG_Queue_Join") == "Tierra_TI")
 		donpcevent "BG_Queue_Join::OnJoinEvent";
 	end;
 
 OnTeam1Die:
 OnTeam2Die:
 OnTeam3Die:
-	if ($@BG_Status == 1 && getvariableofnpc(.BG_Arena$,"BG_Queue_Join") == "Tierra_TI") {
+	if ((!getbattleflag("bg_queue_interface") && $@BG_Status == 1 && getvariableofnpc(.BG_Arena$,"BG_Queue_Join") == "Tierra_TI") ||
+	(getbattleflag("bg_queue_interface") && $@BG_Status_TI == 1)) {
 		if (killerrid == 0) end;
 		// Killed Position
 		getmapxy .@m$, .@x, .@y, BL_PC;
@@ -61,24 +157,24 @@ OnTeam3Die:
 		if (.@id8967) makeitem 8967,.@id8967,"region_8",.@x,.@y;
 		// Drop a New Skull
 		if (@killer_bg_id != .@Bid) {
-			if (.@Bid == $@BG_Team1)
+			if (.@Bid == getd(.T1$))
 				makeitem 8965,1,"region_8",.@x,.@y;
-			else if (.@Bid == $@BG_Team2)
+			else if (.@Bid == getd(.T2$))
 				makeitem 8966,1,"region_8",.@x,.@y;
-			else if (.@Bid == $@BG_Team3)
+			else if (.@Bid == getd(.T3$))
 				makeitem 8967,1,"region_8",.@x,.@y;
 		}
 	}
 	end;
 
 OnBuildTeams:
-	set $@BG_Team1,bg_create("region_8",10,49,0,"Tierra_TI::OnTeam1Quit","Tierra_TI::OnTeam1Die");
-	set $@BG_Team2,bg_create("region_8",89,49,1,"Tierra_TI::OnTeam2Quit","Tierra_TI::OnTeam2Die");
-	set $@BG_Team3,bg_create("region_8",49,89,2,"Tierra_TI::OnTeam3Quit","Tierra_TI::OnTeam3Die");
+	set getd(.T1$),bg_create("region_8",10,49,0,"Tierra_TI::OnTeam1Quit","Tierra_TI::OnTeam1Die");
+	set getd(.T2$),bg_create("region_8",89,49,1,"Tierra_TI::OnTeam2Quit","Tierra_TI::OnTeam2Die");
+	set getd(.T3$),bg_create("region_8",49,89,2,"Tierra_TI::OnTeam3Quit","Tierra_TI::OnTeam3Die");
 	end;
 
 OnReady:
-	if (getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Tierra_TI")
+	if (!getbattleflag("bg_queue_interface") && getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Tierra_TI")
 		end;
 
 	initnpctimer;
@@ -87,26 +183,28 @@ OnReady:
 	set .Team3_Score, 0;
 	donpceventall "OnEmblemTI";
 	sleep 2100;
-	bg_warp $@BG_Team1,"region_8",29,49;
-	bg_warp $@BG_Team2,"region_8",70,50;
-	bg_warp $@BG_Team3,"region_8",49,70;
+	bg_warp getd(.T1$),"region_8",29,49;
+	bg_warp getd(.T2$),"region_8",70,50;
+	bg_warp getd(.T3$),"region_8",49,70;
 	sleep 2100;
 	donpcevent "#gti_respawn::OnBGStart";
 	donpcevent "#cti_respawn::OnBGStart";
 	donpcevent "#tti_respawn::OnBGStart";
 	sleep 1000;
-	bg_team_reveal $@BG_Team1;
-	bg_team_updatescore $@BG_Team1,.Team1_Score;
+	bg_team_reveal getd(.T1$);
+	bg_team_updatescore getd(.T1$),.Team1_Score;
 	sleep 1000;
-	bg_team_reveal $@BG_Team2;
-	bg_team_updatescore $@BG_Team2,.Team2_Score;
+	bg_team_reveal getd(.T2$);
+	bg_team_updatescore getd(.T2$),.Team2_Score;
 	sleep 1000;
-	bg_team_reveal $@BG_Team3;
-	bg_team_updatescore $@BG_Team3,.Team3_Score;
+	bg_team_reveal getd(.T3$);
+	bg_team_updatescore getd(.T3$),.Team3_Score;
 	end;
 
 OnValidateScore:
-	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Tierra_TI")
+	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Tierra_TI"))
+		end;
+	if (getbattleflag("bg_queue_interface") && $@BG_Status_TI != 1)
 		end;
 	if (.Team1_Score >= 80 || .Team2_Score >= 80 || .Team3_Score >= 80)
 		donpcevent "Tierra_TI::OnMatchEnd";
@@ -127,33 +225,36 @@ OnMatchEnd:
 	donpcevent "#gti_respawn::OnBGStop";
 	donpcevent "#cti_respawn::OnBGStop";
 	donpcevent "#tti_respawn::OnBGStop";
-	set $@BG_Status, 2;
+	if (getbattleflag("bg_queue_interface"))
+		set $@BG_Status_TI, 2;
+	else
+		set $@BG_Status, 2;
 	// =======================================================
 	// Team Rewards
 	// =======================================================
 	.@reward_win = 5;
 	.@reward_lose = 3;
 	if (.Team1_Score > .Team2_Score && .Team1_Score > .Team3_Score) {
-		bg_reward $@BG_Team1,7773,.@reward_win,0,0,"BG_TI",1,2,0;
-		bg_reward $@BG_Team2,7773,.@reward_lose,0,0,"BG_TI",1,2,2;
-		bg_reward $@BG_Team3,7773,.@reward_lose,0,0,"BG_TI",1,2,2;
-		mapannounce "region_8","The " + bg_get_data($@BG_Team1,2) + " has won the Battle of Tierra Inferno!",1,bg_get_data($@BG_Team1,4);
+		bg_reward getd(.T1$),7773,.@reward_win,0,0,"BG_TI",1,2,0;
+		bg_reward getd(.T2$),7773,.@reward_lose,0,0,"BG_TI",1,2,2;
+		bg_reward getd(.T3$),7773,.@reward_lose,0,0,"BG_TI",1,2,2;
+		mapannounce "region_8","The " + bg_get_data(getd(.T1$),2) + " has won the Battle of Tierra Inferno!",1,bg_get_data(getd(.T1$),4);
 	}
 	else if (.Team2_Score > .Team1_Score && .Team2_Score > .Team3_Score) {
-		bg_reward $@BG_Team1,7773,.@reward_lose,0,0,"BG_TI",1,2,2;
-		bg_reward $@BG_Team2,7773,.@reward_win,0,0,"BG_TI",1,2,0;
-		bg_reward $@BG_Team3,7773,.@reward_lose,0,0,"BG_TI",1,2,2;
-		mapannounce "region_8","The " + bg_get_data($@BG_Team1,2) + " has won the Battle of Tierra Inferno!",1,bg_get_data($@BG_Team2,4);
+		bg_reward getd(.T1$),7773,.@reward_lose,0,0,"BG_TI",1,2,2;
+		bg_reward getd(.T2$),7773,.@reward_win,0,0,"BG_TI",1,2,0;
+		bg_reward getd(.T3$),7773,.@reward_lose,0,0,"BG_TI",1,2,2;
+		mapannounce "region_8","The " + bg_get_data(getd(.T1$),2) + " has won the Battle of Tierra Inferno!",1,bg_get_data(getd(.T2$),4);
 	}
 	else if (.Team3_Score > .Team1_Score && .Team3_Score > .Team2_Score) {
-		bg_reward $@BG_Team1,7773,.@reward_lose,0,0,"BG_TI",1,2,2;
-		bg_reward $@BG_Team2,7773,.@reward_lose,0,0,"BG_TI",1,2,2;
-		bg_reward $@BG_Team3,7773,.@reward_win,0,0,"BG_TI",1,2,0;
-		mapannounce "region_8","The " + bg_get_data($@BG_Team1,2) + " has won the Battle of Tierra Inferno!",1,bg_get_data($@BG_Team3,4);
+		bg_reward getd(.T1$),7773,.@reward_lose,0,0,"BG_TI",1,2,2;
+		bg_reward getd(.T2$),7773,.@reward_lose,0,0,"BG_TI",1,2,2;
+		bg_reward getd(.T3$),7773,.@reward_win,0,0,"BG_TI",1,2,0;
+		mapannounce "region_8","The " + bg_get_data(getd(.T1$),2) + " has won the Battle of Tierra Inferno!",1,bg_get_data(getd(.T3$),4);
 	} else {
-		bg_reward $@BG_Team1,7773,.@reward_lose,0,0,"BG_TI",1,2,1;
-		bg_reward $@BG_Team2,7773,.@reward_lose,0,0,"BG_TI",1,2,1;
-		bg_reward $@BG_Team3,7773,.@reward_lose,0,0,"BG_TI",1,2,1;
+		bg_reward getd(.T1$),7773,.@reward_lose,0,0,"BG_TI",1,2,1;
+		bg_reward getd(.T2$),7773,.@reward_lose,0,0,"BG_TI",1,2,1;
+		bg_reward getd(.T3$),7773,.@reward_lose,0,0,"BG_TI",1,2,1;
 		mapannounce "region_8","The battle is over. There are no Winners!",1,0x696969;
 	}
 	// =======================================================
@@ -169,9 +270,17 @@ region_8,28,42,0	script	Sacrifice Totem::BlueTotem	HIDDEN_NPC,2,2,{
 	end;
 
 OnTouch:
-	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Tierra_TI")
+	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Tierra_TI"))
 		end;
-	if (getcharid(4) != $@BG_Team1)
+	if (getbattleflag("bg_queue_interface") && $@BG_Status_TI != 1)
+		end;
+
+	if (getbattleflag("bg_queue_interface"))
+		.@t$ = "$@BG_TI_Team1";
+	else
+		.@t$ = "$@BG_Team1";
+
+	if (getcharid(4) != getd(.@t$))
 		end;
 
 	set .@Points, 0;
@@ -192,10 +301,14 @@ OnTouch:
 		set .@Score, getvariableofnpc(.Team1_Score,"Tierra_TI") + .@Points;
 		if (.@Score > 80) set .@Score, 80;
 		set getvariableofnpc(.Team1_Score,"Tierra_TI"),.@Score;
-		bg_team_updatescore $@BG_Team1,.@Score;
-		mapannounce "region_8",bg_get_data($@BG_Team1,2) + " : " + .@Points + " slaughtered skulls by " + strcharinfo(0) + " [" + .@Score + "/80]",1,bg_get_data($@BG_Team1,4);
+		bg_team_updatescore getd(.@t$),.@Score;
+		mapannounce "region_8",bg_get_data(getd(.@t$),2) + " : " + .@Points + " slaughtered skulls by " + strcharinfo(0) + " [" + .@Score + "/80]",1,bg_get_data(getd(.@t$),4);
+		bg_rankpoints "skulls",.@Points,$@skulls*.@Points;
 		donpcevent "Tierra_TI::OnValidateScore";
 	}
+	end;
+OnInit:
+	setunitdata(getnpcid(0), UNPC_GROUP_ID, 100);
 	end;
 }
 
@@ -205,9 +318,17 @@ region_8,71,57,0	script	Sacrifice Totem::RedTotem	HIDDEN_NPC,2,2,{
 	end;
 
 OnTouch:
-	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Tierra_TI")
+	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Tierra_TI"))
 		end;
-	if (getcharid(4) != $@BG_Team2)
+	if (getbattleflag("bg_queue_interface") && $@BG_Status_TI != 1)
+		end;
+
+	if (getbattleflag("bg_queue_interface"))
+		.@t$ = "$@BG_TI_Team2";
+	else
+		.@t$ = "$@BG_Team2";
+
+	if (getcharid(4) != getd(.@t$))
 		end;
 
 	set .@Points, 0;
@@ -228,10 +349,14 @@ OnTouch:
 		set .@Score, getvariableofnpc(.Team2_Score,"Tierra_TI") + .@Points;
 		if (.@Score > 80) set .@Score, 80;
 		set getvariableofnpc(.Team2_Score,"Tierra_TI"),.@Score;
-		bg_team_updatescore $@BG_Team2,.@Score;
-		mapannounce "region_8",bg_get_data($@BG_Team2,2) + " : " + .@Points + " slaughtered skulls by " + strcharinfo(0) + " [" + .@Score + "/80]",1,bg_get_data($@BG_Team2,4);
+		bg_team_updatescore getd(.@t$),.@Score;
+		mapannounce "region_8",bg_get_data(getd(.@t$),2) + " : " + .@Points + " slaughtered skulls by " + strcharinfo(0) + " [" + .@Score + "/80]",1,bg_get_data(getd(.@t$),4);
+		bg_rankpoints "skulls",.@Points,$@skulls*.@Points;
 		donpcevent "Tierra_TI::OnValidateScore";
 	}
+	end;
+OnInit:
+	setunitdata(getnpcid(0), UNPC_GROUP_ID, 101);
 	end;
 }
 
@@ -241,9 +366,17 @@ region_8,44,71,0	script	Sacrifice Totem::GreenTotem	HIDDEN_NPC,2,2,{
 	end;
 
 OnTouch:
-	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Tierra_TI")
+	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Tierra_TI"))
 		end;
-	if (getcharid(4) != $@BG_Team3)
+	if (getbattleflag("bg_queue_interface") && $@BG_Status_TI != 1)
+		end;
+
+	if (getbattleflag("bg_queue_interface"))
+		.@t$ = "$@BG_TI_Team3";
+	else
+		.@t$ = "$@BG_Team3";
+
+	if (getcharid(4) != getd(.@t$))
 		end;
 
 	set .@Points, 0;
@@ -264,10 +397,14 @@ OnTouch:
 		set .@Score, getvariableofnpc(.Team3_Score,"Tierra_TI") + .@Points;
 		if (.@Score > 80) set .@Score, 80;
 		set getvariableofnpc(.Team3_Score,"Tierra_TI"),.@Score;
-		bg_team_updatescore $@BG_Team3,.@Score;
-		mapannounce "region_8",bg_get_data($@BG_Team3,2) + " : " + .@Points + " slaughtered skulls by " + strcharinfo(0) + " [" + .@Score + "/80]",1,bg_get_data($@BG_Team3,4);
+		bg_team_updatescore getd(.@t$),.@Score;
+		mapannounce "region_8",bg_get_data(getd(.@t$),2) + " : " + .@Points + " slaughtered skulls by " + strcharinfo(0) + " [" + .@Score + "/80]",1,bg_get_data(getd(.@t$),4);
+		bg_rankpoints "skulls",.@Points,$@skulls*.@Points;
 		donpcevent "Tierra_TI::OnValidateScore";
 	}
+	end;
+OnInit:
+	setunitdata(getnpcid(0), UNPC_GROUP_ID, 102);
 	end;
 }
 
@@ -294,9 +431,13 @@ region_8	mapflag	bg_consume
 region_8,75,47,2	script	Bravo Base::TIF_Croix	GUILD_FLAG,{
 	end;
 OnEmblemTI:
-	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Tierra_TI")
-		end;
-	flagemblembg $@BG_Team2,1;
+	if (!getbattleflag("bg_queue_interface"))
+		.@t$ = "$@BG_Team2";
+	else
+		.@t$ = "$@BG_TI_Team2";
+
+	flagemblembg getd(.@t$);
+	setunitdata(getnpcid(0), UNPC_GROUP_ID, 101);
 	end;
 }
 
@@ -305,9 +446,13 @@ region_8,75,52,2	duplicate(TIF_Croix)	Bravo Base#ti_2	GUILD_FLAG
 region_8,24,47,6	script	Alpha Base::TIF_Guillaume	GUILD_FLAG,{
 	end;
 OnEmblemTI:
-	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Tierra_TI")
-		end;
-	flagemblembg $@BG_Team1,1;
+	if (!getbattleflag("bg_queue_interface"))
+		.@t$ = "$@BG_Team1";
+	else
+		.@t$ = "$@BG_TI_Team1";
+
+	flagemblembg getd(.@t$);
+	setunitdata(getnpcid(0), UNPC_GROUP_ID, 100);
 	end;
 }
 
@@ -316,9 +461,13 @@ region_8,24,52,6	duplicate(TIF_Guillaume)	Alpha Base#ti_2	GUILD_FLAG
 region_8,47,75,4	script	Charlie Base::TIF_Traitor	GUILD_FLAG,{
 	end;
 OnEmblemTI:
-	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Tierra_TI")
-		end;
-	flagemblembg $@BG_Team3,1;
+	if (!getbattleflag("bg_queue_interface"))
+		.@t$ = "$@BG_Team3";
+	else
+		.@t$ = "$@BG_TI_Team3";
+
+	flagemblembg getd(.@t$);
+	setunitdata(getnpcid(0), UNPC_GROUP_ID, 102);
 	end;
 }
 

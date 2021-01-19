@@ -6031,6 +6031,138 @@ BUILDIN_FUNC(bg_monster_immunity) {
 	return SCRIPT_CMD_SUCCESS;
 }
 
+// Extended Features BG 
+// For now, only used to add statistics
+BUILDIN_FUNC(bg_rankpoints)
+{
+	struct map_session_data *sd;
+	struct battleground_data *bg;
+	const char *type;
+	int i, add_value, fame;
+
+	if( !script_accid2sd(5,sd) )
+		return SCRIPT_CMD_FAILURE;
+
+	if( sd == NULL )
+		return 0;
+
+	if( !sd->bg_id || (bg = bg_team_search(sd->bg_id)) == NULL )
+		return 0;
+	ARR_FIND(0,MAX_BG_MEMBERS,i,bg->members[i].sd == sd);
+	if( i >= MAX_BG_MEMBERS )
+		return 0;
+
+	type = script_getstr(st,2);
+	add_value = script_getnum(st,3);
+	fame = script_getnum(st,4);
+
+	if (fame)
+		pc_addbgpoints(sd,fame);
+
+	if (!strcmpi(type,"fame"))
+		return SCRIPT_CMD_SUCCESS;
+
+	if (!strcmpi(type,"skulls"))
+		add2limit(sd->status.bgstats.skulls,add_value,USHRT_MAX);
+	else if (!strcmpi(type,"eos_flags"))
+		add2limit(sd->status.bgstats.eos_flags,add_value,USHRT_MAX);
+	else if(!strcmpi(type,"sc_stole"))
+		add2limit(sd->status.bgstats.sc_stole,add_value,USHRT_MAX);
+	else if (!strcmpi(type,"sc_captured"))
+		add2limit(sd->status.bgstats.sc_captured,add_value,USHRT_MAX);
+	else if (!strcmpi(type,"sc_droped"))
+		add2limit(sd->status.bgstats.sc_droped,add_value,USHRT_MAX);
+	else if (!strcmpi(type,"ctf_taken"))
+		add2limit(sd->status.bgstats.ctf_taken,add_value,USHRT_MAX);
+	else if (!strcmpi(type,"ctf_captured"))
+		add2limit(sd->status.bgstats.ctf_captured,add_value,USHRT_MAX);
+	else if (!strcmpi(type,"ctf_droped"))
+		add2limit(sd->status.bgstats.ctf_droped,add_value,USHRT_MAX);
+	else if (!strcmpi(type,"dom_off_kills"))
+		add2limit(sd->status.bgstats.dom_off_kills,add_value,USHRT_MAX);
+	else if (!strcmpi(type,"dom_def_kills"))
+		add2limit(sd->status.bgstats.dom_def_kills,add_value,USHRT_MAX);
+	else if (!strcmpi(type,"barricade"))
+		add2limit(sd->status.bgstats.barricade_kill,add_value,USHRT_MAX);
+	else if (!strcmpi(type,"emperium"))
+		add2limit(sd->status.bgstats.emperium_kill,add_value,USHRT_MAX);
+	else if (!strcmpi(type,"gstone"))
+		add2limit(sd->status.bgstats.gstone_kill,add_value,USHRT_MAX);
+	else if (!strcmpi(type,"ru_captures"))
+		add2limit(sd->status.bgstats.ru_captures,add_value,USHRT_MAX);
+	else if (!strcmpi(type,"boss_flags"))
+		add2limit(sd->status.bgstats.boss_flags,add_value,USHRT_MAX);
+	else if (!strcmpi(type,"boss_killed"))
+		add2limit(sd->status.bgstats.boss_killed,add_value,USHRT_MAX);
+	else
+		ShowDebug("bg_rankpoints: unknown string (%s)\n", (script_getstr(st,2)));
+
+	return SCRIPT_CMD_SUCCESS;
+}
+
+BUILDIN_FUNC(bg_rankpoints_area)
+{
+	const char *str, *type;
+	int m, x0, y0, x1, y1, bg_id;
+	int i = 0, add_value;
+	int type_val, fame;
+	struct battleground_data *bg = NULL;
+	struct map_session_data *sd;
+
+	bg_id = script_getnum(st,2);
+	str = script_getstr(st,3);
+
+	if( (bg = bg_team_search(bg_id)) == NULL || (m = map_mapname2mapid(str)) < 0 )
+	{
+		script_pushint(st,0);
+		return SCRIPT_CMD_SUCCESS;
+	}
+
+	x0 = script_getnum(st,4);
+	y0 = script_getnum(st,5);
+	x1 = script_getnum(st,6);
+	y1 = script_getnum(st,7);
+	type = script_getstr(st,8);
+
+	if( !strcmpi(type,"eos_bases") )
+		type_val = 1;
+	else if( !strcmpi(type,"dom_bases") )
+		type_val = 2;
+	else if( !strcmpi(type,"ru_captures") )
+		type_val = 3;
+	else return 0; // Invalid Type
+
+	add_value = script_getnum(st,9);
+	fame = script_getnum(st,10);
+
+	for( i = 0; i < MAX_BG_MEMBERS; i++ )
+	{
+		if( (sd = bg->members[i].sd) == NULL )
+			continue;
+		if (x0 != -1 && y0 != -1 && x1 != -1 && y1 != -1) {
+			if( sd->bl.m != m || sd->bl.x < x0 || sd->bl.y < y0 || sd->bl.x > x1 || sd->bl.y > y1 )
+				continue;
+		}
+		if (fame)
+			pc_addbgpoints(sd,fame);
+
+		switch( type_val )
+		{
+		case 1:
+			add2limit(sd->status.bgstats.eos_bases,add_value,USHRT_MAX);
+			break;
+		case 2:
+			add2limit(sd->status.bgstats.dom_bases,add_value,USHRT_MAX);
+			break;
+		case 3:
+			add2limit(sd->status.bgstats.ru_captures,add_value,USHRT_MAX);
+			break;
+		}
+	}
+
+	return SCRIPT_CMD_SUCCESS;
+}
+
 static int bg_cleanmap_sub(struct block_list *bl, va_list ap)
 {
 	nullpo_ret(bl);
@@ -8650,6 +8782,7 @@ BUILDIN_FUNC(readparam)
  *	3 : account_id
  *	4 : bg_id
  *	5 : clan_id
+ *  6 : queue_id
  *------------------------------------------*/
 BUILDIN_FUNC(getcharid)
 {
@@ -8670,6 +8803,7 @@ BUILDIN_FUNC(getcharid)
 	case 3: script_pushint(st,sd->status.account_id); break;
 	case 4: script_pushint(st,sd->bg_id); break;
 	case 5: script_pushint(st,sd->status.clan_id); break;
+	case 6: script_pushint(st,(sd->qd)?sd->qd->q_id:0); break;
 	default:
 		ShowError("buildin_getcharid: invalid parameter (%d).\n", num);
 		script_pushint(st,0);
@@ -13369,6 +13503,38 @@ BUILDIN_FUNC(flagemblem)
 		}
 		bool changed = ( nd->u.scr.guild_id != g_id )?true:false;
 		nd->u.scr.guild_id = g_id;
+		clif_guild_emblem_area(&nd->bl);
+		/* guild flag caching */
+		if( g_id ) /* adding a id */
+			guild_flag_add(nd);
+		else if( changed ) /* removing a flag */
+			guild_flag_remove(nd);
+	}
+	return SCRIPT_CMD_SUCCESS;
+}
+
+BUILDIN_FUNC(flagemblembg) {
+	TBL_NPC* nd;
+	int g_id = script_getnum(st,2);
+
+	if( script_hasdata(st,3) )
+		nd = npc_name2id(script_getstr(st,3));
+	else
+		nd = map_id2nd(st->oid);
+
+	if(g_id < 0) return SCRIPT_CMD_SUCCESS;
+	
+	if( nd == NULL ) {
+		ShowError("script:flagemblem: npc %d not found\n", st->oid);
+	} else if( nd->subtype != NPCTYPE_SCRIPT ) {
+		ShowError("script:flagemblem: unexpected subtype %d for npc %d '%s'\n", nd->subtype, st->oid, nd->exname);
+	} else {
+		bool changed = ( nd->u.scr.guild_id != g_id )?true:false;
+		if( !map_getmapflag(nd->bl.m, MF_BATTLEGROUND))
+			nd->u.scr.guild_id = g_id;
+		else
+			nd->u.scr.bg_id = g_id;
+		
 		clif_guild_emblem_area(&nd->bl);
 		/* guild flag caching */
 		if( g_id ) /* adding a id */
@@ -20424,6 +20590,15 @@ BUILDIN_FUNC(bg_queue_leave)
 	return 0;
 }
 
+BUILDIN_FUNC(bg_queue_leaveall)
+{
+	struct map_session_data *sd;
+	if( !script_rid2sd(sd) )
+		return SCRIPT_CMD_SUCCESS;
+	bg_queue_leaveall(sd);
+	return SCRIPT_CMD_SUCCESS;
+}
+
 BUILDIN_FUNC(bg_queue_data)
 {
 	struct queue_data *qd;
@@ -21000,6 +21175,8 @@ BUILDIN_FUNC(bg_warp)
 	map_name = script_getstr(st,3);
 	if( !strcmp(map_name,"RespawnPoint") )
 		mapindex = 0;
+	else if( !strcmp(map_name,"EntryPoint") )
+		mapindex = 2000;
 	else if( (mapindex = mapindex_name2id(map_name)) == 0 )
 		return SCRIPT_CMD_SUCCESS; // Invalid Map
 	x = script_getnum(st,4);
@@ -21170,6 +21347,67 @@ BUILDIN_FUNC(bg_logincount)
 		i = bg_countlogin(sd, true);
 	script_pushint(st, i);
 	
+	return SCRIPT_CMD_SUCCESS;
+}
+
+/*==========================================
+ * Reset battle rank
+ * type :
+ *	1 : Battleground Rank
+ *	2 : War of Emperium Rank
+ * flag:
+ *  0 : No Reward
+ *  1 : Reward
+ *------------------------------------------*/
+BUILDIN_FUNC(battle_rank_reset)
+{
+	int type = script_getnum(st,2);
+	bool flag;
+
+	if (type < 1 && type > 2)
+		return SCRIPT_CMD_FAILURE;
+
+	if( script_hasdata(st,3) ){
+		flag = script_getnum(st,3) != 0;
+	}else{
+		flag = true;
+	}
+
+	if (type == 1)
+		type = RANK_BG;
+	else
+		type = RANK_WOE;
+
+	pc_rank_reset(type,flag);
+	return SCRIPT_CMD_SUCCESS;
+}
+
+/*==========================================
+ * Return fame rank position
+ * return by @num :
+ *	0 : Battleground Rank
+ *	1 : War of Emperium Rank
+ *------------------------------------------*/
+BUILDIN_FUNC(getcharrank)
+{
+	int num;
+	TBL_PC *sd;
+
+	num = script_getnum(st,2);
+
+	if( !script_charid2sd(3,sd) ){
+		script_pushint(st,-1); //return 0, according docs
+		return SCRIPT_CMD_SUCCESS;
+	}
+
+	switch( num ) {
+	case 0: script_pushint(st,pc_famerank(sd->status.char_id, -1)); break;
+	case 1: script_pushint(st,pc_famerank(sd->status.char_id, -2)); break;
+	default:
+		ShowError("buildin_getcharrank: invalid parameter (%d).\n", num);
+		script_pushint(st,0);
+		break;
+	}
 	return SCRIPT_CMD_SUCCESS;
 }
 
@@ -26231,6 +26469,7 @@ struct script_function buildin_func[] = {
 	BUILDIN_DEF(bg_queue_join, "i"),
 	BUILDIN_DEF(bg_queue_partyjoin, "ii"),
 	BUILDIN_DEF(bg_queue_leave, "i"),
+	BUILDIN_DEF(bg_queue_leaveall, ""),
 	BUILDIN_DEF(bg_queue_data, "ii"),
 	BUILDIN_DEF(bg_queue2team, "iisiiiss"),
 	BUILDIN_DEF(bg_queue2team_single, "iisii"),
@@ -26248,7 +26487,14 @@ struct script_function buildin_func[] = {
 	BUILDIN_DEF(viewpointmap, "siiiii"),
 	BUILDIN_DEF(bg_monster_reveal,"iii"),
 	BUILDIN_DEF(donpceventall,"s"),
-	BUILDIN_DEF2(flagemblem, "flagemblembg", "ii"),	BUILDIN_DEF(bg_destroy,"i"),
+	BUILDIN_DEF2(flagemblem, "flagemblembg", "ii"),
+	BUILDIN_DEF(flagemblembg, "i?"),
+	// Extended Features BG
+	BUILDIN_DEF(bg_rankpoints,"sii?"),
+	BUILDIN_DEF(bg_rankpoints_area,"isiiiisii"),
+	BUILDIN_DEF(battle_rank_reset,"ii"),
+	BUILDIN_DEF(getcharrank,"i?"),
+	BUILDIN_DEF(bg_destroy,"i"),
 
 	// Instancing
 	BUILDIN_DEF(instance_create,"s??"),
