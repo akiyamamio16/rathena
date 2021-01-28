@@ -1153,5 +1153,3 @@ rush_cas02
 rush_cas03
 rush_cas04
 region_8
-bat_cc
-bat_cc2

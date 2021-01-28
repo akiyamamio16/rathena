@@ -14,7 +14,3 @@
 	ACMD_DEF(leader),
 	ACMD_DEF(reportafk),
 	ACMD_DEF(bgskill),
-	ACMD_DEF(bgrank),
-	ACMD_DEF(woerank),
-	ACMD_DEF(bgstats),
-	ACMD_DEF(woestats),

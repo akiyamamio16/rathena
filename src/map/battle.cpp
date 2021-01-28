@@ -2416,13 +2416,10 @@ int battle_calc_chorusbonus(struct map_session_data *sd) {
 
 	int members = 0;
 
-	if (!sd || (!sd->status.party_id && !sd->bg_id))
+	if (!sd || !sd->status.party_id)
 		return 0;
 
-	if (battle_config.bg_party_skills && sd->bg_id)
-		members = bg_team_foreachsamemap(party_sub_count_class, sd, 0, MAPID_THIRDMASK, MAPID_MINSTRELWANDERER);
-	else
-		members = party_foreachsamemap(party_sub_count_class, sd, 0, MAPID_THIRDMASK, MAPID_MINSTRELWANDERER);
+	members = party_foreachsamemap(party_sub_count_class, sd, 0, MAPID_THIRDMASK, MAPID_MINSTRELWANDERER);
 
 	if (members < 3)
 		return 0; // Bonus remains 0 unless 3 or more Minstrels/Wanderers are in the party.
@@ -8333,8 +8330,6 @@ int battle_check_target( struct block_list *src, struct block_list *target,int f
 		{
 			sbg_id = bg_team_get_id(s_bl);
 			tbg_id = bg_team_get_id(t_bl);
-			if (battle_config.bg_party_skills && flag&(BCT_PARTY) && sbg_id == tbg_id)
-				state |= BCT_PARTY;
 		}
 		if( flag&(BCT_PARTY|BCT_ENEMY) )
 		{

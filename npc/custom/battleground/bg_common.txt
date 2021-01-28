@@ -37,29 +37,14 @@ bat_room	mapflag	town
 OnInit:
 	// Configuration
 	// *****************************************************
-
-	// Battleground Arena 1: Enabled 0: Disabled
-	setarray .Is_Enabled[0],
-			1,	// Capture the Flag
-			1,	// Team DeathMatch
-			1,	// Conquest
-			1,	// Rush
-			1,	// Triple Inferno
-			1,	// Eye of Storm
-			1,	// Domination
-			1,	// Bossnia
-			1;	// Stone Control
-
 	// Battleground Rotation - Main NPC name
-	setarray .BG_Arenas$[0],	   "Flavius_CTF",	  "Flavius_TD",		"Conquest",		"Rush",		"Tierra_TI",		"Tierra_EOS",	"Tierra_DOM","Tierra_Boss","Flavius_SC";
+	setarray .BG_Arenas$[0],		"Flavius_CTF",		"Flavius_TD",			"Conquest",		"Rush",		"Tierra_TI",			"Tierra_EOS",		"Tierra_DOM",		"Tierra_Boss",	"Flavius_SC";
 	// Battleground Arena Name - for announcements
-	setarray .BG_Names$[0],		"Capture the Flag",	"Team DeathMatch",	"Conquest",		"Rush",	  "Triple Inferno",	   "Eye of Storm",	"Domination",  "Bossnia", "Stone Control";
+	setarray .BG_Names$[0],		"Capture the Flag",	"Team DeathMatch",		"Conquest",		"Rush",		"Triple Inferno",		"Eye of Storm",		"Domination",		"Bossnia",		"Stone Control";
 	// Minimum Players to start the BG
 	setarray .BG_Min[0],	              1,               1,                1,            1,            1,                  1,             1,             1,          1;
 	// Maximum Players per Team
 	setarray .BG_Max[0],	             50,              50,               50,           50,           50,                  50,            50,           50,          50;
-	// Minimum Player BaseLevel to Join Queue
-	setarray .BG_Level[0],	             80,              80,               80,           80,           80,                  80,            80,           80,          80;
 	// BG Message Colors
 	setarray .BG_Color$[0],	                "0xA0522D",    "0x808000",      "0xFFA500",       "0xDDA0DD",		"0x696969",		"0x4169E1",		"0x4169E1",		"0x3399FF",		"0x9ACD32";
 	setarray .BG_Color2[0],	                0xA0522D,    0x808000,      0xFFA500,       0xDDA0DD,		0x696969,		0x4169E1,		0x4169E1,		0x3399FF,		0x9ACD32;
@@ -69,17 +54,6 @@ OnInit:
 	set .HappyHour, 1; 
 	// Happy Hour - Reward rates %
 	set .HappyHourRates, 100 + 20; // +20%
-	// Deserter Cooldown Time (In Seconds)
-	set .DeserterCD, 60;
-	// Battleground Rank Points
-	$@skulls =				1;
-	$@eos_flags =			5;
-	$@sc_stole =			1;
-	$@sc_captured =			5;
-	$@ctf_taken =			1;
-	$@ctf_captured =		25;
-	$@eos_bases =			10;
-	$@dom_bases =			10;
 	// Main Code
 	// *****************************************************
 	set .BG_Count, getarraysize(.BG_Arenas$);
@@ -87,7 +61,7 @@ OnInit:
 	set .VS_Queue, bg_queue_create("Free For All Arena","BG_Queue_Join::OnVersusJoin",80);
 	set .HWE, 0;
 	// Move to Next Arena
-	set $BG_Index,0; // Restart Rotation
+	if ($BG_Index >= .BG_Count) set $BG_Index,0; // Restart Rotation
 	set .TotalArenas, getarraysize(.BG_Arenas$);
 	set .BG_Arena$,.BG_Arenas$[$BG_Index];
 	set .Ready, 1;
@@ -105,18 +79,16 @@ OnInit:
 	end;
 
 OnDoJoin: // @joinbg
-	if (getbattleflag("bg_queue_interface")) {
-		message strcharinfo(0),"You must use the Queue UI interface to join in an Arena.";
-		end;
-	}
 	if (getbattleflag("bg_eAmod_mode") == 0) {
 		message strcharinfo(0),"Battlegrounds are currently disabled.";
 		end;
 	} else if (agitcheck() || agitcheck2()) {
 		dispbottom "[Battleground is currently disabled for this moment due to War of Emperium.]";
 		end;
-	} else if (getstatus(SC_ENTRY_QUEUE_APPLY_DELAY,0)) {
-		dispbottom "[You are a Deserter. Time remaining: "+(getstatus(SC_ENTRY_QUEUE_APPLY_DELAY,5)/1000)+" seconds]";
+	} else if (checkquest(8600,PLAYTIME) == 2) {
+		erasequest 8600;
+	} else if (checkquest(8600,PLAYTIME) == 0) {
+		dispbottom "[You are a Deserter. You can't participate until the indicator goes off]";
 		end;
 	}
 
@@ -129,18 +101,8 @@ OnDoLeave: // @leavebg
 // Easycore
 // @bgmode <1-10>
 OnBGModeCommand:
-	if (getbattleflag("bg_queue_interface")) {
-		message strcharinfo(0),"@bgmode is not available if Queue Interface is ON.";
-		end;
-	}
 	.@x = atoi(.@atcmd_parameters$[0]);
 	if (.@x <= .TotalArenas+1 && .@x > 0) {
-		if (.@x >= 2) {
-			if (!.Is_Enabled[.@x-2]) {
-				message strcharinfo(0),"["+.BG_Names$[.@x-2]+"] is not enabled.";
-				end;
-			}
-		}
 		if (.@x == 1)
 			set $BG_Index, rand(.TotalArenas)-1;
 		else
@@ -212,58 +174,29 @@ OnBGStopCommand:
 	message strcharinfo(0),"Battlegrounds have been disabled.";
 	.@msg$ = "[Battlegrounds] Arenas and Queuing have been disabled by a Game Master.";
 	announce .@msg$, 0, 0x00FFFF, 0x190, 12, 100, 100;
-	if (getbattleflag("bg_queue_interface")) {
-		for (.@i = 0; .@i < getarraysize(.BG_Arenas$); .@i++) {
-			setarray .@b$[0],"CTF","TD","CQ","RU","TI","EOS","DOM","BOSS","SC";
-			if (getd("$@BG_Status_"+.@b$[.@i]))
-				donpcevent .BG_Arenas$[.@i]+"::OnMatchEnd";
-			sleep2 50;
-		}
-	} else {
-		if ($@BG_Status != 0)
-			donpcevent .BG_Arena$+"::OnMatchEnd";
-	}
+	if ($@BG_Status != 0)
+		donpcevent .BG_Arena$+"::OnMatchEnd";
 	callsub OnEndArena;
 OnEndArena:
-	if (getbattleflag("bg_queue_interface")) {
-		setarray .@b$[0],"CTF","TD","CQ","RU","TI","EOS","DOM","BOSS","SC";
-		for (.@i = 0; .@i < getarraysize(.@b$); .@i++) {
-			if (getd("$@BG_Status_"+.@b$[.@i]) != 2)
-				continue;
-			setd("$@BG_Status_"+.@b$[.@i], 0);
-			// Warps Teams
-			bg_warp getd("$@BG_"+.@b$[.@i]+"_Team1"),"EntryPoint",0,0;
-			bg_warp getd("$@BG_"+.@b$[.@i]+"_Team2"),"EntryPoint",0,0;
-			bg_warp getd("$@BG_"+.@b$[.@i]+"_Team3"),"EntryPoint",0,0;
-			// Destroy Teams
-			bg_destroy getd("$@BG_"+.@b$[.@i]+"_Team1"); setd ("$@BG_"+.@b$[.@i]+"_Team1"), 0;
-			bg_destroy getd("$@BG_"+.@b$[.@i]+"_Team2"); setd ("$@BG_"+.@b$[.@i]+"_Team2"), 0;
-			bg_destroy getd("$@BG_"+.@b$[.@i]+"_Team3"); setd ("$@BG_"+.@b$[.@i]+"_Team3"), 0;
-		}
-	} else {
-		set $@BG_Status, 0;
-		if ($@BG_Team1 == 0 && $@BG_Team2 == 0 && $@BG_Team3 == 0)
-			end;
-		// Warps Teams
-		bg_warp $@BG_Team1,"EntryPoint",0,0;
-		bg_warp $@BG_Team2,"EntryPoint",0,0;
-		bg_warp $@BG_Team3,"EntryPoint",0,0;
-		// Destroy Teams
-		bg_destroy $@BG_Team1; set $@BG_Team1, 0;
-		bg_destroy $@BG_Team2; set $@BG_Team2, 0;
-		bg_destroy $@BG_Team3; set $@BG_Team3, 0;
-	}
+	set $@BG_Status, 0;
+	if ($@BG_Team1 == 0 && $@BG_Team2 == 0 && $@BG_Team3 == 0)
+		end;
+	// Warps Teams
+	bg_warp $@BG_Team1,"bat_room",155,150;
+	bg_warp $@BG_Team2,"bat_room",155,150;
+	bg_warp $@BG_Team3,"bat_room",155,150;
+	// Destroy Teams
+	bg_destroy $@BG_Team1; set $@BG_Team1, 0;
+	bg_destroy $@BG_Team2; set $@BG_Team2, 0;
+	bg_destroy $@BG_Team3; set $@BG_Team3, 0;
 OnRotate:
 OnTimer10000: // Rotation if BG don't start... Comment if you don't want to use this method. 120 = 2 Minutes
 	// Check if BG is enabled/disabled [Easycore]
 	if (getbattleflag("bg_eAmod_mode") == 0) end;
-	if (getbattleflag("bg_queue_interface")) end;
 
 	// Move to Next Arena
 	if (set($BG_Index,$BG_Index + 1) >= .BG_Count)
 		set $BG_Index,0; // Restart Rotation
-	if (.Is_Enabled[$BG_Index]!= 1)
-		callsub OnRotate;
 
 	set .BG_Arena$,.BG_Arenas$[$BG_Index];
 	initnpctimer; // Rotation if BG don't start... Comment if you don't want to use this method
@@ -364,13 +297,7 @@ OnClock2200:
 // Registration NPC
 // *********************************************************************
 -	script	BG_Register	FAKE_NPC,{
-	if (getbattleflag("bg_queue_interface")) {
-		mes "[^FFA500Battle Recruiter^000000]";
-		mes "To join in an Arena you must use the Battlefield Interface.";
-		if (select("Warp to Battle Room","Cancel") == 2) close;
-		warp "bat_room",155,150;
-		close;
-	}
+
 	if (getvariableofnpc(.Ready,"BG_Queue_Join") == 0)
 		donpcevent "BG_Queue_Join::OnInit";
 

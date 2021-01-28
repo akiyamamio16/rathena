@@ -51,21 +51,6 @@ struct queue_data {
 	char queue_name[50], join_event[EVENT_NAME_LENGTH];
 };
 
-/// Enum of responses when applying for a Battleground
-enum e_bg_queue_apply_ack : uint16 {
-	BG_APPLY_NONE = 0,
-	BG_APPLY_ACCEPT, ///< Accept
-	BG_APPLY_QUEUE_FINISHED, ///< Queuing has finished
-	BG_APPLY_INVALID_NAME, ///< Invalid name of Battleground
-	BG_APPLY_INVALID_APP, ///< Invalid application
-	BG_APPLY_PLAYER_COUNT, ///< Too many players in party/guild
-	BG_APPLY_PLAYER_LEVEL, ///< Level too low/high
-	BG_APPLY_DUPLICATE, ///< Duplicate application
-	BG_APPLY_RECONNECT, ///< Reconnect then apply
-	BG_APPLY_PARTYGUILD_LEADER, ///< Only party/guild leader can apply
-	BG_APPLY_PLAYER_CLASS, ///< Your class can't apply
-};
-
 extern struct guild bg_guild[];
 extern const unsigned int bg_colors[];
 
@@ -110,9 +95,6 @@ int bg_checkskill (struct battleground_data *bg, int id);
 void bg_block_skill_status (struct battleground_data *bg, int skillnum);
 void bg_block_skill_start (struct battleground_data *bg, int skillnum, t_tick time);
 //int bg_block_skill_end (int tid, unsigned int tick, int id, intptr_t data);
-int bg_team_sub_count(struct block_list *bl, va_list ap);
-int bg_team_foreachsamemap(int (*func)(struct block_list *,va_list),struct map_session_data *sd,int range,...);
-int bg_queue_member_search(struct queue_data *qd, int id);
 
 void bg_reload(void);
 void bg_guild_build_data(void);

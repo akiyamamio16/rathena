@@ -16,88 +16,6 @@
 // BattleGround System - Rush
 // ==============================================================================
 
-// Battleground Queue Engine
-// *********************************************************************
--	script	RU_BG_Queue	-1,{
-	end;
-	
-OnInit:
-	// Configuration
-	.Num = 3;
-	set .BG_Queue, bg_queue_create("Rush",strnpcinfo(0)+"::OnJoinEvent",getvariableofnpc(.BG_level[.Num],"BG_Queue_Join"));
-	.BG_Name$ = getvariableofnpc(.BG_Names$[.Num],"BG_Queue_Join");
-	.BG_Arena$ = getvariableofnpc(.BG_Arenas$[.Num],"BG_Queue_Join");
-	.BG_Min = getvariableofnpc(.BG_Min[.Num],"BG_Queue_Join");
-	.BG_Max = getvariableofnpc(.BG_Max[.Num],"BG_Queue_Join");
-	.TeamMode = getvariableofnpc(.TeamMode,"BG_Queue_Join");
-	end;
-	
-	
-OnJoinBG:
-	if (getcharid(6) == .BG_Queue)
-		end;
-	if (getbattleflag("bg_queue_interface") == 0) {
-		message strcharinfo(0),"Queue UI are currently disabled.";
-		end;
-	} else if (getbattleflag("bg_eAmod_mode") == 0) {
-		message strcharinfo(0),"Battlegrounds are currently disabled.";
-		end;
-	} else if( agitcheck() || agitcheck2() ) {
-		dispbottom "[Battleground is currently disabled for this moment due to War of Emperium.]";
-		end;
-	} else if (!getvariableofnpc(.Is_Enabled[.Num],"BG_Queue_Join")) {
-		message strcharinfo(0),"This arena is currently disabled.";
-		end;
-	} else if (getstatus(SC_ENTRY_QUEUE_APPLY_DELAY,0)) {
-		dispbottom "[You are a Deserter. Time remaining: "+(getstatus(SC_ENTRY_QUEUE_APPLY_DELAY,5)/1000)+" seconds]";
-		end;
-	}
-	if (getcharid(6))
-		bg_queue_leaveall();
-	$@BG_User_Min = .BG_Min*2;
-	bg_queue_join .BG_Queue;
-	end;
-OnDoLeave: // @leavebg
-	bg_queue_leave .BG_Queue;
-	end;
-
-OnJoinEvent:
-	if( $@BG_Status_RU == 2 )
-		end; // BG Ending... Must wait until OnRotate is called
-
-	set .@Queue_Count, bg_queue_data(.BG_Queue,0);
-	switch( $@BG_Status_RU ) {
-		case 0: // Idle - Ready to Start
-
-			if( bg_queue_checkstart(.BG_Queue,.TeamMode,2,.BG_Min) ) {
-				donpcevent .BG_Arena$+"::OnBuildTeams";
-
-				// Fill Teams with Queue Members
-				bg_queue2teams .BG_Queue,.BG_Min,.BG_Max,.TeamMode,$@BG_RU_Team1,$@BG_RU_Team2;
-
-				set $@BG_Status_RU,1;
-				set .@msg$, "Battleground -- " + .BG_Name$ + " -- Begining";
-				bgannounce .@msg$,getvariableofnpc(.BG_Color$[.Num],"BG_Queue_Join");
-
-				donpcevent .BG_Arena$+"::OnReady";
-			} else {
-				set .@msg$, "Battleground -- " + .BG_Name$ + " -- " + (.BG_Min*2 - .@Queue_Count) + " more players to start.";
-				bgannounce .@msg$,getvariableofnpc(.BG_Color$[.Num],"BG_Queue_Join");
-			}
-			break;
-		case 1: // Running - Others can join
-			if( .@Queue_Count > 0 ) {
-				bg_balance_teams .BG_Queue,.BG_Max,.TeamMode,$@BG_RU_Team1,$@BG_RU_Team2;
-				set .@BG_Count1, bg_get_data($@BG_RU_Team1,0);
-				set .@BG_Count2, bg_get_data($@BG_RU_Team2,0);
-				set .@msg$, "Battleground -- " + .BG_Name$ + " -- B: " + .@BG_Count1 + "/" + .BG_Max + ", R: " + .@BG_Count2 + "/" + .BG_Max + " (Playing)";
-
-				bgannounce .@msg$,getvariableofnpc(.BG_Color$[.Num],"BG_Queue_Join");
-			}
-			break;
-	}
-	end;
-}
 // Battleground Engine
 // *********************************************************************
 
@@ -114,21 +32,12 @@ OnInit:
 	setwall "rush_cas04",266,290,10,6,0,"Rush_wall_d";
 	setcell "rush_cas04",266,286,275,295,cell_basilica,1;
 	set .Index,0;
-	if (getbattleflag("bg_queue_interface")) {
-		.T1$ = "$@BG_RU_Team1";
-		.T2$ = "$@BG_RU_Team2";
-	} else {
-		.T1$ = "$@BG_Team1";
-		.T2$ = "$@BG_Team2";
-	}
 	end;
 
 OnTeam1Quit:
 OnTeam2Quit:
-	sc_start(SC_ENTRY_QUEUE_APPLY_DELAY,getvariableofnpc(.DeserterCD,"BG_Queue_Join"),0); // Deserter
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_RU != 0)
-		donpcevent "RU_BG_Queue::OnJoinEvent";
-	if (!getbattleflag("bg_queue_interface") && $@BG_Status != 0 && getvariableofnpc(.BG_Arena$,"BG_Queue_Join") == "Rush")
+	setquest 8600; // Deserter
+	if ($@BG_Status != 0 && getvariableofnpc(.BG_Arena$,"BG_Queue_Join") == "Rush")
 		donpcevent "BG_Queue_Join::OnJoinEvent";
 	end;
 
@@ -143,12 +52,12 @@ OnBuildTeams:
 		case 3: set .Castle$,"rush_cas04"; set .GX,270; set .GY,292; set .CX,270; set .CY,288; break;
 	}
 
-	set getd(.T1$),bg_create(.Castle$,.GX,.GY,0,"Rush::OnTeam1Quit","");
-	set getd(.T2$),bg_create(.Castle$,.CX,.CY,1,"Rush::OnTeam2Quit","");
+	set $@BG_Team1,bg_create(.Castle$,.GX,.GY,0,"Rush::OnTeam1Quit","");
+	set $@BG_Team2,bg_create(.Castle$,.CX,.CY,1,"Rush::OnTeam2Quit","");
 	end;
 
 OnReady:
-	if (!getbattleflag("bg_queue_interface") && getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Rush")
+	if (getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Rush")
 		end;
 
 	initnpctimer;
@@ -175,20 +84,20 @@ OnReady:
 	sleep 2100;
 	switch(.Index) {
 		case 0:
-			bg_warp getd(.T1$),.Castle$,43,229;
-			bg_warp getd(.T2$),.Castle$,43,229;
+			bg_warp $@BG_Team1,.Castle$,43,229;
+			bg_warp $@BG_Team2,.Castle$,43,229;
 			break;
 		case 1:
-			bg_warp getd(.T1$),.Castle$,252,271;
-			bg_warp getd(.T2$),.Castle$,252,271;
+			bg_warp $@BG_Team1,.Castle$,252,271;
+			bg_warp $@BG_Team2,.Castle$,252,271;
 			break;
 		case 2:
-			bg_warp getd(.T1$),.Castle$,216,103;
-			bg_warp getd(.T2$),.Castle$,216,103;
+			bg_warp $@BG_Team1,.Castle$,216,103;
+			bg_warp $@BG_Team2,.Castle$,216,103;
 			break;
 		case 3:
-			bg_warp getd(.T1$),.Castle$,100,280;
-			bg_warp getd(.T2$),.Castle$,100,280;
+			bg_warp $@BG_Team1,.Castle$,100,280;
+			bg_warp $@BG_Team2,.Castle$,100,280;
 			break;
 	}
 	sleep 4000;
@@ -204,9 +113,7 @@ OnTimer360000:
 	end;
 
 OnEmperium:
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_RU != 0)
-		end;
-	if (!getbattleflag("bg_queue_interface") && $@BG_Status != 0 && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Rush"))
+	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Rush")
 		end;
 
 	if (.Defender == 0) { // First Capture
@@ -214,12 +121,12 @@ OnEmperium:
 		set .Defender,getcharid(4);
 		mapannounce .Castle$,bg_get_data(.Defender,3) + " : Castle captured, now prepare to Defend it!!",1,bg_get_data(.Defender,4);
 
-		if (.Defender == getd(.T1$)) {
+		if (.Defender == $@BG_Team1) {
 			set .Team1_Score,1;
-			set .Attacker,getd(.T2$);
+			set .Attacker,$@BG_Team2;
 		} else {
 			set .Team2_Score,1;
-			set .Attacker,getd(.T1$);
+			set .Attacker,$@BG_Team1;
 		}
 
 		bg_warp .Attacker,"RespawnPoint",0,0; // To Cementery and Wait
@@ -250,7 +157,7 @@ OnEmperium:
 
 	// Second Capture
 	mapannounce .Castle$,bg_get_data(.Attacker,3) + " : Castle captured, we won the Battle!!",1,bg_get_data(.Attacker,4);
-	if (.Defender == getd(.T1$))
+	if (.Defender == $@BG_Team1)
 		set .Team2_Score,2;
 	else
 		set .Team1_Score,2;
@@ -263,7 +170,7 @@ OnTimer420000:
 		mapannounce .Castle$,"Castle captured Fail. No winners",1,0xDDA0DD;
 	else {
 		mapannounce .Castle$,bg_get_data(.Defender,3) + " : Castle protected, we won the Battle!!",1,bg_get_data(.Defender,4);
-		if (.Defender == getd(.T2$))
+		if (.Defender == $@BG_Team1)
 			set .Team1_Score,3;
 		else
 			set .Team2_Score,3;
@@ -277,10 +184,7 @@ OnMatchEnd:
 	stopnpctimer "Rush_Respawn";
 	killmonster .Castle$,"Rush::OnEmperium";
 	bg_updatescore .Castle$,.Team1_Score,.Team2_Score;
-	if (getbattleflag("bg_queue_interface"))
-		set $@BG_Status_RU, 2;
-	else
-		set $@BG_Status, 2;
+	set $@BG_Status, 2;
 	// =======================================================
 	// Team Rewards
 	// =======================================================
@@ -291,7 +195,7 @@ OnMatchEnd:
 	} else
 		set .@Won,2;
 
-	bg_reward getd(.T1$),7773,.@Reward,0,0,"BG_RUSH",1,7,.@Won;
+	bg_reward $@BG_Team1,7773,.@Reward,0,0,"BG_RUSH",1,7,.@Won;
 	// =======================================================
 	.@Reward = 3;
 	if (.Team2_Score > .Team1_Score) {
@@ -300,7 +204,7 @@ OnMatchEnd:
 	} else
 		set .@Won,2;
 
-	bg_reward getd(.T2$),7773,.@Reward,0,0,"BG_RUSH",1,7,.@Won;
+	bg_reward $@BG_Team2,7773,.@Reward,0,0,"BG_RUSH",1,7,.@Won;
 	// =======================================================
 	set .Team1_Score, 0;
 	set .Team2_Score, 0;
@@ -329,7 +233,7 @@ OnTimer25000:
 			areapercentheal .@Castle$,198,224,207,233,100,100;
 			if (.@Defender == 0)
 				areawarp .@Castle$,198,224,207,233,.@Castle$,43,229;
-			else if (getd(.T1$) == .@Defender) {
+			else if ($@BG_Team1 == .@Defender) {
 				areawarp .@Castle$,198,229,207,233,.@Castle$,71,36;
 				areawarp .@Castle$,198,224,207,227,.@Castle$,43,229;
 			} else {
@@ -341,7 +245,7 @@ OnTimer25000:
 			areapercentheal .@Castle$,142,44,151,53,100,100;
 			if (.@Defender == 0)
 				areawarp .@Castle$,142,44,151,53,.@Castle$,252,271;
-			else if (getd(.T1$) == .@Defender) {
+			else if ($@BG_Team1 == .@Defender) {
 				areawarp .@Castle$,142,49,151,53,.@Castle$,40,235;
 				areawarp .@Castle$,142,44,151,47,.@Castle$,252,271;
 			} else {
@@ -353,7 +257,7 @@ OnTimer25000:
 			areapercentheal .@Castle$,56,6,69,17,100,100;
 			if (.@Defender == 0)
 				areawarp .@Castle$,56,6,69,17,.@Castle$,216,103;
-			else if (getd(.T1$) == .@Defender) {
+			else if ($@BG_Team1 == .@Defender) {
 				areawarp .@Castle$,56,6,61,17,.@Castle$,31,190;
 				areawarp .@Castle$,63,6,69,17,.@Castle$,216,103;
 			} else {
@@ -365,7 +269,7 @@ OnTimer25000:
 			areapercentheal .@Castle$,266,286,275,295,100,100;
 			if (.@Defender == 0)
 				areawarp .@Castle$,266,286,275,295,.@Castle$,100,280;
-			else if (getd(.T1$) == .@Defender) {
+			else if ($@BG_Team1 == .@Defender) {
 				areawarp .@Castle$,266,291,275,295,.@Castle$,116,89;
 				areawarp .@Castle$,266,286,275,289,.@Castle$,100,280;
 			} else {
@@ -377,15 +281,6 @@ OnTimer25000:
 
 	initnpctimer;
 	end;
-
-OnInit:
-	if (getbattleflag("bg_queue_interface")) {
-		.T1$ = "$@BG_RU_Team1";
-		.T2$ = "$@BG_RU_Team2";
-	} else {
-		.T1$ = "$@BG_Team1";
-		.T2$ = "$@BG_Team2";
-	}
 }
 
 // Battleground Therapist
@@ -401,10 +296,6 @@ rush_cas01,198,230,6	script	Therapist in battle#rh1	4_F_SISTER,{
 	close2;
 	openstorage;
 	end;
-OnInit:
-	setunittitle(getnpcid(0), "[Blue Team]");
-	setunitdata(getnpcid(0), UNPC_GROUP_ID, 100);
-	end;
 }
 
 rush_cas01,198,226,6	script	Therapist in battle#rh2	4_F_SISTER,{
@@ -416,10 +307,6 @@ rush_cas01,198,226,6	script	Therapist in battle#rh2	4_F_SISTER,{
 	repairall;
 	close2;
 	openstorage;
-	end;
-OnInit:
-	setunittitle(getnpcid(0), "[Red Team]");
-	setunitdata(getnpcid(0), UNPC_GROUP_ID, 101);
 	end;
 }
 
@@ -433,10 +320,6 @@ rush_cas02,142,50,6	script	Therapist in battle#rh3	4_F_SISTER,{
 	close2;
 	openstorage;
 	end;
-OnInit:
-	setunittitle(getnpcid(0), "[Blue Team]");
-	setunitdata(getnpcid(0), UNPC_GROUP_ID, 100);
-	end;
 }
 
 rush_cas02,142,46,6	script	Therapist in battle#rh4	4_F_SISTER,{
@@ -448,10 +331,6 @@ rush_cas02,142,46,6	script	Therapist in battle#rh4	4_F_SISTER,{
 	repairall;
 	close2;
 	openstorage;
-	end;
-OnInit:
-	setunittitle(getnpcid(0), "[Red Team]");
-	setunitdata(getnpcid(0), UNPC_GROUP_ID, 101);
 	end;
 }
 
@@ -465,10 +344,6 @@ rush_cas03,60,17,4	script	Therapist in battle#rh5	4_F_SISTER,{
 	close2;
 	openstorage;
 	end;
-OnInit:
-	setunittitle(getnpcid(0), "[Blue Team]");
-	setunitdata(getnpcid(0), UNPC_GROUP_ID, 100);
-	end;
 }
 
 rush_cas03,64,17,4	script	Therapist in battle#rh6	4_F_SISTER,{
@@ -480,10 +355,6 @@ rush_cas03,64,17,4	script	Therapist in battle#rh6	4_F_SISTER,{
 	repairall;
 	close2;
 	openstorage;
-	end;
-OnInit:
-	setunittitle(getnpcid(0), "[Red Team]");
-	setunitdata(getnpcid(0), UNPC_GROUP_ID, 101);
 	end;
 }
 
@@ -497,10 +368,6 @@ rush_cas04,266,292,6	script	Therapist in battle#rh7	4_F_SISTER,{
 	close2;
 	openstorage;
 	end;
-OnInit:
-	setunittitle(getnpcid(0), "[Blue Team]");
-	setunitdata(getnpcid(0), UNPC_GROUP_ID, 100);
-	end;
 }
 
 rush_cas04,266,288,6	script	Therapist in battle#rh8	4_F_SISTER,{
@@ -512,10 +379,6 @@ rush_cas04,266,288,6	script	Therapist in battle#rh8	4_F_SISTER,{
 	repairall;
 	close2;
 	openstorage;
-	end;
-OnInit:
-	setunittitle(getnpcid(0), "[Red Team]");
-	setunitdata(getnpcid(0), UNPC_GROUP_ID, 101);
 	end;
 }
 

@@ -48,19 +48,6 @@ Body:
     Sprite: S_EMPEL_2
   - Mob: BG_EMPELIUM
     Sprite: EMPELIUM
-  - Mob: BG_OBJ_NEUTRAL
-    Sprite: OBJ_NEUTRAL
-  - Mob: BG_OBJ_FLAG_A
-    Sprite: OBJ_FLAG_A
-  - Mob: BG_OBJ_FLAG_B
-    Sprite: OBJ_FLAG_B
-  - Mob: BG_BAPHOMET
-    Sprite: BAPHOMET
-  - Mob: BG_LORD_OF_DEATH
-    Sprite: LORD_OF_DEATH
-  - Mob: BG_THANATOS
-    Sprite: THANATOS
-
 #Body:
   # Examples
 #  - Mob: PORING

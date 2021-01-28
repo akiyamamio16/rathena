@@ -9819,6 +9819,7 @@ void clif_refresh(struct map_session_data *sd)
 	clif_refresh_storagewindow(sd);
 }
 
+
 /// Updates the object's (bl) name on client.
 /// Used to update when a char leaves a party/guild. [Skotlex]
 /// Needed because when you send a 0x95 packet, the client will not remove the cached party/guild info that is not sent.
@@ -17255,42 +17256,6 @@ void clif_bossmapinfo(struct map_session_data *sd, struct mob_data *md, enum e_b
 	WFIFOSET(fd,70);
 }
 
-/// Check Equip [Easycore]
-/// 0442 <Length>.W <count>.L <Skill_list>.W (ZC_SKILL_SELECT_REQUEST).
-int clif_skill_select_list(struct map_session_data *sd) {
-	int i;
-	int fd;
-	unsigned short skills[3];
-	memset(skills, 0, sizeof(skills));
-	skills[0] = CS_EQUIPMENT;
-	skills[1] = CS_BG;
-	skills[2] = CS_WOE;
-
-	nullpo_ret(sd);
-
-	fd = sd->fd;
-
-	if (!fd)
-		return 0;
-	
-	WFIFOHEAD(fd, 8 + 3 * 2);
-	WFIFOW(fd, 0) = 0x442;
-
-	for (i = 0; i < 3; i++)
-		WFIFOW(fd, 8 + i * 2) = skills[i];
-	
-	WFIFOW(fd, 2) = 8 + 3 * 2;
-	WFIFOL(fd, 4) = 3;
-	WFIFOSET(fd, WFIFOW(fd, 2));
-
-	sd->menuskill_id = SC_AUTOSHADOWSPELL;
-	sd->menuskill_val = 3;
-
-	sd->state.check_equip_skill = true;
-	sd->state.workinprogress = WIP_DISABLE_ALL;
-
-	return 1;
-}
 
 /// Requesting equip of a player (CZ_EQUIPWIN_MICROSCOPE).
 /// 02d6 <account id>.L
@@ -17304,12 +17269,7 @@ void clif_parse_ViewPlayerEquip(int fd, struct map_session_data* sd)
 
 	if (sd->bl.m != tsd->bl.m)
 		return;
-	if (battle_config.bg_extended_check_equip) { //Yumi Doubt #2
-		sd->ce_gid = tsd->status.account_id;
-		clif_skill_select_list(sd);
-		return;
-	}
-	if( tsd->status.show_equip || pc_has_permission(sd, PC_PERM_VIEW_EQUIPMENT) )
+	else if( tsd->status.show_equip || pc_has_permission(sd, PC_PERM_VIEW_EQUIPMENT) )
 		clif_viewequip_ack(sd, tsd);
 	else
 		clif_msg(sd, VIEW_EQUIP_FAIL);
@@ -18275,159 +18235,6 @@ void clif_sendbgemblem_single(int fd, struct map_session_data *sd)
 	safestrncpy(WFIFOCP(fd,6), sd->status.name, NAME_LENGTH);
 	WFIFOW(fd,30) = sd->bg_id;
 	WFIFOSET(fd,packet_len(0x2dd));
-}
-
-/// Battlegrounds queue incoming apply request from client.
-/// Queue types: 1 solo queue, 2 party queue, 4 guild queue.
-/// 0x8d7 <queue type>.W <battleground name>.24B (CZ_REQ_ENTRY_QUEUE_APPLY)
-void clif_parse_bg_queue_apply_request(int fd, struct map_session_data *sd)
-{
-	if (!battle_config.bg_queue_interface)
-		return;
-
-	nullpo_retv(sd);
-
-	short type = RFIFOW(fd,2);
-	char name[NAME_LENGTH];
-	char event[128];
-
-	safestrncpy(name, RFIFOCP(fd, 4), NAME_LENGTH);
-
-	if (sd->bg_id) {
-		clif_bg_queue_apply_result(BG_APPLY_INVALID_APP, name, sd);
-		return;
-	}
-
-	if (stristr(name, "Capture"))
-		sprintf(event,"CTF_BG_Queue::OnJoinBG");
-	else if (stristr(name, "DeathMatch"))
-		sprintf(event,"TD_BG_Queue::OnJoinBG");
-	else if (stristr(name, "Conquest"))
-		sprintf(event,"CQ_BG_Queue::OnJoinBG");
-	else if (stristr(name, "Rush"))
-		sprintf(event,"RU_BG_Queue::OnJoinBG");
-	else if (stristr(name, "Inferno"))
-		sprintf(event,"TI_BG_Queue::OnJoinBG");
-	else if (stristr(name, "Storm"))
-		sprintf(event,"EOS_BG_Queue::OnJoinBG");
-	else if (stristr(name, "Domination"))
-		sprintf(event,"DOM_BG_Queue::OnJoinBG");
-	else if (stristr(name, "Boss"))
-		sprintf(event,"BOSS_BG_Queue::OnJoinBG");
-	else if (stristr(name, "Stone"))
-		sprintf(event,"SC_BG_Queue::OnJoinBG");
-	else {
-		clif_bg_queue_apply_result(BG_APPLY_INVALID_NAME, name, sd);
-		return;
-	}
-
-	npc_event_do_id(event, sd->bl.id);
-}
-
-/// Outgoing battlegrounds queue apply result.
-/// Result types: @see e_bg_queue_apply_ack
-/// 0x8d8 <result>.B <battleground name>.24B (ZC_ACK_ENTRY_QUEUE_APPLY)
-void clif_bg_queue_apply_result(e_bg_queue_apply_ack result, const char *name, struct map_session_data *sd)
-{
-	nullpo_retv(sd);
-
-	int fd = sd->fd;
-
-	WFIFOHEAD(fd, packet_len(0x8d8));
-	WFIFOW(fd,0) = 0x8d8;
-	WFIFOB(fd,2) = result;
-	safestrncpy(WFIFOCP(fd,3), name, NAME_LENGTH);
-	WFIFOSET(fd, packet_len(0x8d8));
-}
-
-/// Outgoing battlegrounds queue apply notification.
-/// Sends a notification at the start of the battlegrounds queue and is also used to update the queue number.
-/// 0x8d9 <battleground name>.24B <queue number>.L (ZC_NOTIFY_ENTRY_QUEUE_APPLY)
-void clif_bg_queue_apply_notify(const char *name, struct map_session_data *sd)
-{
-	struct queue_data *qd;
-	nullpo_retv(sd);
-
-	if ((qd = sd->qd) == NULL) {
-		ShowError("clif_bg_queue_apply_notify: Player is not in a battleground queue.\n");
-		return;
-	}
-
-	int fd = sd->fd;
-
-	WFIFOHEAD(fd, packet_len(0x8d9));
-	WFIFOW(fd,0) = 0x8d9;
-	safestrncpy(WFIFOCP(fd,2), qd->queue_name, NAME_LENGTH);
-	WFIFOL(fd,2+NAME_LENGTH) = bg_queue_member_search(qd, sd->bl.id);
-	WFIFOSET(fd, packet_len(0x8d9));
-}
-
-/// Battlegrounds queue outgoing cancel result.
-/// 0x8db <result>.B <battleground name>.24B (ZC_ACK_ENTRY_QUEUE_CANCEL)
-void clif_bg_queue_cancel_result(bool success, const char *name, struct map_session_data *sd)
-{
-	nullpo_retv(sd);
-
-	int fd = sd->fd;
-
-	WFIFOHEAD(fd, packet_len(0x8d8));
-	WFIFOW(fd,0) = 0x8db;
-	WFIFOB(fd,2) = success;
-	safestrncpy(WFIFOCP(fd,3), name, NAME_LENGTH);
-	WFIFOSET(fd, packet_len(0x8d8));
-}
-
-/// Battlegrounds queue incoming cancel request from client.
-/// 0x8da <battleground name>.24B (CZ_REQ_ENTRY_QUEUE_CANCEL)
-void clif_parse_bg_queue_cancel_request(int fd, struct map_session_data *sd)
-{
-	if (!battle_config.bg_queue_interface)
-		return;
-
-	nullpo_retv(sd);
-
-	bool success;
-
-	if (sd->qd) {
-		bg_queue_leaveall(sd);
-		success = true;
-	} else {
-		ShowWarning("clif_parse_bg_queue_cancel_request: Player trying to request leaving non-existent queue with name: %s (AID:%d CID:%d).\n", sd->status.name, sd->status.account_id, sd->status.char_id);
-		success = false;
-	}
-
-	char name[NAME_LENGTH];
-
-	safestrncpy( name, RFIFOCP( fd, 2 ), NAME_LENGTH );
-
-	clif_bg_queue_cancel_result(success, name, sd);
-}
-
-/// Battlegrounds queue incoming queue number request from client.
-/// 0x90a <battleground name>.24B (CZ_REQ_ENTRY_QUEUE_RANKING)
-void clif_parse_bg_queue_request_queue_number(int fd, struct map_session_data *sd)
-{
-	nullpo_retv(sd);
-
-	char name[NAME_LENGTH];
-
-	safestrncpy( name, RFIFOCP(fd, 2), NAME_LENGTH );
-
-	clif_bg_queue_apply_notify(name, sd);
-}
-
-/// Silently removes all the battlegrounds stuff client side so that you will open the first BG window when you press battle on the interface.
-/// Send this when a player joins a battleground so that it will remove all the queue stuff upon warping in.
-/// 0x90e (ZC_ENTRY_QUEUE_INIT)
-void clif_bg_queue_entry_init(struct map_session_data *sd)
-{
-	nullpo_retv(sd);
-
-	int fd = sd->fd;
-
-	WFIFOHEAD(fd, packet_len(0x90e));
-	WFIFOW(fd,0) = 0x90e;
-	WFIFOSET(fd, packet_len(0x90e));
 }
 
 /// Custom Fonts (ZC_NOTIFY_FONT).
@@ -19466,41 +19273,6 @@ void clif_parse_SkillSelectMenu(int fd, struct map_session_data *sd) {
 		sd->state.workinprogress = WIP_DISABLE_NONE;
 		skill_autospell(sd, RFIFOW(fd, info->pos[1]));
 	} else if (sd->menuskill_id == SC_AUTOSHADOWSPELL) {
-	// Check Equip [Easycore]
-	if (sd->state.check_equip_skill) {
-		int skill = RFIFOW(fd, info->pos[1]);
-		struct map_session_data *tsd = map_id2sd(sd->ce_gid);
-
-		sd->state.check_equip_skill = false;
-		sd->state.workinprogress = WIP_DISABLE_NONE;
-		clif_menuskill_clear(sd);
-
-		if (!tsd) {
-			clif_displaymessage(fd,"Player not found.");
-			return;
-		}
-
-		if (!(skill >= 780 && skill <= 782))
-			return;
-
-		switch(skill) {
-			case CS_EQUIPMENT:
-				if( tsd->status.show_equip || pc_has_permission(sd, PC_PERM_VIEW_EQUIPMENT) )
-					clif_viewequip_ack(sd, tsd);
-				else
-					clif_msg(sd, VIEW_EQUIP_FAIL);
-				break;
-			case CS_BG:
-				pc_battle_stats(sd,tsd,1);
-				break;
-			case CS_WOE:
-				pc_battle_stats(sd,tsd,2);
-				break;
-			default:
-				return;
-		}	
-		return;
-	}
 		if (pc_istrading(sd)) {
 			clif_skill_fail(sd, sd->ud.skill_id, USESKILL_FAIL_LEVEL, 0);
 			clif_menuskill_clear(sd);
@@ -21873,26 +21645,6 @@ void clif_parse_equipswitch_request_single( int fd, struct map_session_data* sd 
 
 	pc_equipitem( sd, index, pc_equippoint(sd, index), true );
 #endif
-}
-
-void clif_rank_info(struct map_session_data *sd, int points, int total, int flag)
-{
-	char message[100];
-
-	if (flag) {
-		if( points < 0 )
-			sprintf(message, "[Your Battleground Rank -%d = %d points]", points, total);
-		else
-			sprintf(message, "[Your Battleground Rank +%d = %d points]", points, total);
-	} else {
-		if( points < 0 )
-			sprintf(message, "[Your War of Emperium Rank -%d = %d points]", points, total);
-		else
-			sprintf(message, "[Your War of Emperium Rank +%d = %d points]", points, total);
-	}
-
-	clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], message, false, SELF);
-	//clif_displaymessage(sd->fd, message);
 }
 
 void clif_parse_StartUseSkillToId( int fd, struct map_session_data* sd ){

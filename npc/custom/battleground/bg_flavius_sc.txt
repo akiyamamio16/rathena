@@ -12,88 +12,6 @@
 //    - Discord:  Easycore#3412
 //= = = = = = = = = = = = = = = = = = = = = = = = = = = = = = 
 
-// Battleground Queue Engine
-// *********************************************************************
--	script	SC_BG_Queue	-1,{
-	end;
-	
-OnInit:
-	// Configuration
-	.Num = 8;
-	set .BG_Queue, bg_queue_create("Stone Control",strnpcinfo(0)+"::OnJoinEvent",getvariableofnpc(.BG_level[.Num],"BG_Queue_Join"));
-	.BG_Name$ = getvariableofnpc(.BG_Names$[.Num],"BG_Queue_Join");
-	.BG_Arena$ = getvariableofnpc(.BG_Arenas$[.Num],"BG_Queue_Join");
-	.BG_Min = getvariableofnpc(.BG_Min[.Num],"BG_Queue_Join");
-	.BG_Max = getvariableofnpc(.BG_Max[.Num],"BG_Queue_Join");
-	.TeamMode = getvariableofnpc(.TeamMode,"BG_Queue_Join");
-	end;
-	
-	
-OnJoinBG:
-	if (getcharid(6) == .BG_Queue)
-		end;
-	if (getbattleflag("bg_queue_interface") == 0) {
-		message strcharinfo(0),"Queue UI are currently disabled.";
-		end;
-	} else if (getbattleflag("bg_eAmod_mode") == 0) {
-		message strcharinfo(0),"Battlegrounds are currently disabled.";
-		end;
-	} else if( agitcheck() || agitcheck2() ) {
-		dispbottom "[Battleground is currently disabled for this moment due to War of Emperium.]";
-		end;
-	} else if (!getvariableofnpc(.Is_Enabled[.Num],"BG_Queue_Join")) {
-		message strcharinfo(0),"This arena is currently disabled.";
-		end;
-	} else if (getstatus(SC_ENTRY_QUEUE_APPLY_DELAY,0)) {
-		dispbottom "[You are a Deserter. Time remaining: "+(getstatus(SC_ENTRY_QUEUE_APPLY_DELAY,5)/1000)+" seconds]";
-		end;
-	}
-	if (getcharid(6))
-		bg_queue_leaveall();
-	$@BG_User_Min = .BG_Min*2;
-	bg_queue_join .BG_Queue;
-	end;
-OnDoLeave: // @leavebg
-	bg_queue_leave .BG_Queue;
-	end;
-
-OnJoinEvent:
-	if( $@BG_Status_SC == 2 )
-		end; // BG Ending... Must wait until OnRotate is called
-
-	set .@Queue_Count, bg_queue_data(.BG_Queue,0);
-	switch( $@BG_Status_SC ) {
-		case 0: // Idle - Ready to Start
-
-			if( bg_queue_checkstart(.BG_Queue,.TeamMode,2,.BG_Min) ) {
-				donpcevent .BG_Arena$+"::OnBuildTeams";
-
-				// Fill Teams with Queue Members
-				bg_queue2teams .BG_Queue,.BG_Min,.BG_Max,.TeamMode,$@BG_SC_Team1,$@BG_SC_Team2;
-
-				set $@BG_Status_SC,1;
-				set .@msg$, "Battleground -- " + .BG_Name$ + " -- Begining";
-				bgannounce .@msg$,getvariableofnpc(.BG_Color$[.Num],"BG_Queue_Join");
-
-				donpcevent .BG_Arena$+"::OnReady";
-			} else {
-				set .@msg$, "Battleground -- " + .BG_Name$ + " -- " + (.BG_Min*2 - .@Queue_Count) + " more players to start.";
-				bgannounce .@msg$,getvariableofnpc(.BG_Color$[.Num],"BG_Queue_Join");
-			}
-			break;
-		case 1: // Running - Others can join
-			if( .@Queue_Count > 0 ) {
-				bg_balance_teams .BG_Queue,.BG_Max,.TeamMode,$@BG_SC_Team1,$@BG_SC_Team2;
-				set .@BG_Count1, bg_get_data($@BG_SC_Team1,0);
-				set .@BG_Count2, bg_get_data($@BG_SC_Team2,0);
-				set .@msg$, "Battleground -- " + .BG_Name$ + " -- B: " + .@BG_Count1 + "/" + .BG_Max + ", R: " + .@BG_Count2 + "/" + .BG_Max + " (Playing)";
-
-				bgannounce .@msg$,getvariableofnpc(.BG_Color$[.Num],"BG_Queue_Join");
-			}
-			break;
-	}
-	end;
-}
 // ==============================================================================
 // BattleGround System - Flavius Stone Control
 // ==============================================================================*/
@@ -103,40 +21,30 @@ OnJoinEvent:
 
 OnGuillaumeQuit:
 OnCroixQuit:
-	sc_start(SC_ENTRY_QUEUE_APPLY_DELAY,getvariableofnpc(.DeserterCD,"BG_Queue_Join")*1000,0); // Deserter
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_SC != 0)
-		donpcevent "SC_BG_Queue::OnJoinEvent";
-	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 0 && getvariableofnpc(.BG_Arena$,"BG_Queue_Join") == "Flavius_SC"))
+	setquest 8600; // DeserterDeserter
+	set @killer_bg_src,0;
+	if ($@BG_Status != 0 && getvariableofnpc(.BG_Arena$,"BG_Queue_Join") == "Flavius_SC")
 		donpcevent "BG_Queue_Join::OnJoinEvent";
 OnGuillaumeDie:
 OnCroixDie:
-	if (($@BG_Status == 1 || $@BG_Status_SC == 1) && getvariableofnpc(.BG_Arena$,"BG_Queue_Join") == "Flavius_SC" && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Stone Carrier
+	if ($@BG_Status == 1 && getvariableofnpc(.BG_Arena$,"BG_Queue_Join") == "Flavius_SC" && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Stone Carrier
 		set .Stone[.@Stone],0;
 		getmapxy .@m$, .@x, .@y, BL_PC;
 		movenpc "Neutral Stone#" + .@Stone, .@x, .@y;
 		mapannounce "bat_b04","Neutral Stone Dropped by [ " + strcharinfo(0) + " ]",1,0xFFFFFF;
-		bg_rankpoints "sc_droped",1,0;
-		if (killerrid)
-			bg_rankpoints "fame",0,1,killerrid;
 		initnpctimer "Neutral Stone#" + .@Stone;
 		deltimer "Flavius_SC::OnFlash";
 		enablenpc "Neutral Stone#" + .@Stone;
 	}
-	setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,false);
 	end;
 
 OnBuildTeams:
-	if (getbattleflag("bg_queue_interface")) {
-		set $@BG_SC_Team1,bg_create("bat_b04",390,10,0,"Flavius_SC::OnGuillaumeQuit","Flavius_SC::OnGuillaumeDie");
-		set $@BG_SC_Team2,bg_create("bat_b04",10,290,1,"Flavius_SC::OnCroixQuit","Flavius_SC::OnCroixDie");
-	} else {
-		set $@BG_Team1,bg_create("bat_b04",390,10,0,"Flavius_SC::OnGuillaumeQuit","Flavius_SC::OnGuillaumeDie");
-		set $@BG_Team2,bg_create("bat_b04",10,290,1,"Flavius_SC::OnCroixQuit","Flavius_SC::OnCroixDie");
-	}
+	set $@BG_Team1,bg_create("bat_b04",390,10,0,"Flavius_SC::OnGuillaumeQuit","Flavius_SC::OnGuillaumeDie");
+	set $@BG_Team2,bg_create("bat_b04",10,290,1,"Flavius_SC::OnCroixQuit","Flavius_SC::OnCroixDie");
 	end;
 
 OnReady:
-	if (getbattleflag("bg_queue_interface") == 0 && getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC")
+	if (getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC")
 		end;
 
 	initnpctimer;
@@ -150,13 +58,8 @@ OnReady:
 
 	bg_updatescore "bat_b04",.guillaume_score,.croix_score;
 	sleep 2000;
-	if (getbattleflag("bg_queue_interface")) {
-		bg_warp $@BG_SC_Team1,"bat_b04",328,150;
-		bg_warp $@BG_SC_Team2,"bat_b04",62,150;
-	} else {
-		bg_warp $@BG_Team1,"bat_b04",328,150;
-		bg_warp $@BG_Team2,"bat_b04",62,150;
-	}
+	bg_warp $@BG_Team1,"bat_b04",328,150;
+	bg_warp $@BG_Team2,"bat_b04",62,150;
 	sleep 2000;
 	donpcevent "#guisc_respawn::OnBGStart";
 	donpcevent "#crosc_respawn::OnBGStart";
@@ -173,9 +76,7 @@ OnCroixScore:
 	end;
 
 OnValidateScore:
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_SC != 1)
-		end;
-	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC"))
+	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC")
 		end;
 	if (.guillaume_score > 99)
 		set .guillaume_score,99;
@@ -200,24 +101,21 @@ OnMatchEnd:
 	stopnpctimer;
 	donpcevent "#guisc_respawn::OnBGStop";
 	donpcevent "#crosc_respawn::OnBGStop";
-	if (getbattleflag("bg_queue_interface"))
-		set $@BG_Status_SC, 2;
-	else
-		set $@BG_Status, 2;
+	set $@BG_Status, 2;
 	// =======================================================
 	// Team Rewards
 	// =======================================================
 	if (.guillaume_score > .croix_score) { // Guillaume Won
-		bg_reward getd(.T1$),7829,30,0,0,"BG_SC",1,5,0;
-		bg_reward getd(.T2$),7829,15,0,0,"BG_SC",1,5,2;
+		bg_reward $@BG_Team1,7829,30,0,0,"BG_SC",1,5,0;
+		bg_reward $@BG_Team2,7829,15,0,0,"BG_SC",1,5,2;
 		mapannounce "bat_b04","The Guillaume army has won the Battle of Flavius Stone Control!",1,0x0000FF;
 	} else if (.guillaume_score < .croix_score) { // Croix Won
-		bg_reward getd(.T1$),7829,15,0,0,"BG_SC",1,5,2;
-		bg_reward getd(.T2$),7829,30,0,0,"BG_SC",1,5,0;
+		bg_reward $@BG_Team1,7829,15,0,0,"BG_SC",1,5,2;
+		bg_reward $@BG_Team2,7829,30,0,0,"BG_SC",1,5,0;
 		mapannounce "bat_b04","The Croix army has won the Battle of Flavius Stone Control!",1,0xFF0000;
 	} else {
-		bg_reward getd(.T1$),7829,15,0,0,"BG_SC",1,5,1;
-		bg_reward getd(.T2$),7829,15,0,0,"BG_SC",1,5,1;
+		bg_reward $@BG_Team1,7829,15,0,0,"BG_SC",1,5,1;
+		bg_reward $@BG_Team2,7829,15,0,0,"BG_SC",1,5,1;
 		mapannounce "bat_b04","The battle is over. This is a Tie...!",1,0x9ACD32;
 	}
 	// =======================================================
@@ -240,27 +138,16 @@ OnMatchEnd:
 	end;
 
 OnFlash:
-	if (($@BG_Status == 1 && getvariableofnpc(.BG_Arena$,"BG_Queue_Join") == "Flavius_SC") ||
-	(getbattleflag("bg_queue_interface") && $@BG_Status_SC == 1)
-	&& set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) {
+	if ($@BG_Status == 1 && getvariableofnpc(.BG_Arena$,"BG_Queue_Join") == "Flavius_SC" && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) {
 		getmapxy .@m$, .@x, .@y, BL_PC;
-		if (getcharid(4) == getd(.T1$))
+		if (getcharid(4) == $@BG_Team1)
 			viewpointmap "bat_b04",1, .@x, .@y, .@Stone, 0x0000FF;
-		else if (getcharid(4) == getd(.T2$))
+		else if (getcharid(4) == $@BG_Team2)
 			viewpointmap "bat_b04",1, .@x, .@y, .@Stone, 0xFF0000;
 		specialeffect(EF_BOWLINGBASH);
 		emotion ET_HELP,getcharid(3);
 		addtimer 2000, "Flavius_SC::OnFlash";
 		percentheal -5,-5;
-	}
-	end;
-OnInit:
-	if (getbattleflag("bg_queue_interface")) {
-		.T1$ = "$@BG_SC_Team1";
-		.T2$ = "$@BG_SC_Team2";
-	} else {
-		.T1$ = "$@BG_Team1";
-		.T2$ = "$@BG_Team2";
 	}
 	end;
 }
@@ -283,11 +170,7 @@ bat_b04,177,182,0	script	Neutral Stone#1	1905,1,1,{
 	end;
 
 OnTouch:
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_SC != 1)
-		end;
-	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC"))
-		end;
-	if (Hp < 1 || getcharid(4) == 0)
+	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC" || Hp < 1 || getcharid(4) == 0)
 		end;
 	set .@Stone,atoi(strnpcinfo(2));
 	if (getvariableofnpc(.Stone[.@Stone],"Flavius_SC") != 0)
@@ -341,13 +224,9 @@ bat_b04,85,159,0	script	Stone Point::csp1	1309,1,1,{
 	end;
 
 OnTouch:
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_SC != 1)
+	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC" || Hp < 1)
 		end;
-	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC"))
-		end;
-	if (Hp < 1)
-		end;
-	if (.Point != 0 && getcharid(4) == getd(.T1$) && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Guillaume Stole
+	if (.Point != 0 && getcharid(4) == $@BG_Team1 && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Guillaume Stole
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),getcharid(0);
 		setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 
@@ -361,12 +240,11 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,true);
 
 		mapannounce "bat_b04","Croix Stone has been stolen by [ " + strcharinfo(0) + " ]",1,0x0000FF;
-		bg_rankpoints "sc_stole",1,$@sc_stole;
 
 		addtimer 2000, "Flavius_SC::OnFlash";
 		set .Point,0;
 		stopnpctimer;
-	} else if (.Point == 0 && getcharid(4) == getd(.T2$) && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
+	} else if (.Point == 0 && getcharid(4) == $@BG_Team2 && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
 		initnpctimer;
 		set .Point,.@Stone;
 		set .Count, 0;
@@ -375,7 +253,6 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,false);
 
 		mapannounce "bat_b04","Croix Stone captured by [ " + strcharinfo(0) + " ]",1,0xFF0000;
-		bg_rankpoints "sc_captured",1,$@ctf_captured;
 
 		setnpcdisplay strnpcinfo(3),"Croix Stone",1905;
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),0;
@@ -398,15 +275,6 @@ OnBGStop:
 	setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 	set .Point, 0;
 	set .Count, 0;
-	end;
-OnInit:
-	if (getbattleflag("bg_queue_interface")) {
-		.T1$ = "$@BG_SC_Team1";
-		.T2$ = "$@BG_SC_Team2";
-	} else {
-		.T1$ = "$@BG_Team1";
-		.T2$ = "$@BG_Team2";
-	}
 	end;
 }
 
@@ -414,13 +282,9 @@ bat_b04,78,159,0	script	Stone Point::csp2	1309,1,1,{
 	end;
 
 OnTouch:
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_SC != 1)
+	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC" || Hp < 1)
 		end;
-	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC"))
-		end;
-	if (Hp < 1)
-		end;
-	if (.Point != 0 && getcharid(4) == getd(.T1$) && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Guillaume Stole
+	if (.Point != 0 && getcharid(4) == $@BG_Team1 && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Guillaume Stole
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),getcharid(0);
 		setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 
@@ -434,12 +298,11 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,true);
 
 		mapannounce "bat_b04","Croix Stone has been stolen by [ " + strcharinfo(0) + " ]",1,0x0000FF;
-		bg_rankpoints "sc_stole",1,$@sc_stole;
 
 		addtimer 2000, "Flavius_SC::OnFlash";
 		set .Point,0;
 		stopnpctimer;
-	} else if (.Point == 0 && getcharid(4) == getd(.T2$) && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
+	} else if (.Point == 0 && getcharid(4) == $@BG_Team2 && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
 		initnpctimer;
 		set .Point,.@Stone;
 		set .Count, 0;
@@ -448,7 +311,6 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,false);
 
 		mapannounce "bat_b04","Croix Stone captured by [ " + strcharinfo(0) + " ]",1,0xFF0000;
-		bg_rankpoints "sc_captured",1,$@ctf_captured;
 
 		setnpcdisplay strnpcinfo(3),"Croix Stone",1905;
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),0;
@@ -471,15 +333,6 @@ OnBGStop:
 	setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 	set .Point, 0;
 	set .Count, 0;
-	end;
-OnInit:
-	if (getbattleflag("bg_queue_interface")) {
-		.T1$ = "$@BG_SC_Team1";
-		.T2$ = "$@BG_SC_Team2";
-	} else {
-		.T1$ = "$@BG_Team1";
-		.T2$ = "$@BG_Team2";
-	}
 	end;
 }
 
@@ -487,13 +340,9 @@ bat_b04,71,159,0	script	Stone Point::csp3	1309,1,1,{
 	end;
 
 OnTouch:
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_SC != 1)
+	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC" || Hp < 1)
 		end;
-	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC"))
-		end;
-	if (Hp < 1)
-		end;
-	if (.Point != 0 && getcharid(4) == getd(.T1$) && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Guillaume Stole
+	if (.Point != 0 && getcharid(4) == $@BG_Team1 && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Guillaume Stole
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),getcharid(0);
 		setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 
@@ -507,12 +356,11 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,true);
 
 		mapannounce "bat_b04","Croix Stone has been stolen by [ " + strcharinfo(0) + " ]",1,0x0000FF;
-		bg_rankpoints "sc_stole",1,$@sc_stole;
 
 		addtimer 2000, "Flavius_SC::OnFlash";
 		set .Point,0;
 		stopnpctimer;
-	} else if (.Point == 0 && getcharid(4) == getd(.T2$) && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
+	} else if (.Point == 0 && getcharid(4) == $@BG_Team2 && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
 		initnpctimer;
 		set .Point,.@Stone;
 		set .Count, 0;
@@ -521,7 +369,6 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,false);
 
 		mapannounce "bat_b04","Croix Stone captured by [ " + strcharinfo(0) + " ]",1,0xFF0000;
-		bg_rankpoints "sc_captured",1,$@ctf_captured;
 
 		setnpcdisplay strnpcinfo(3),"Croix Stone",1905;
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),0;
@@ -544,15 +391,6 @@ OnBGStop:
 	setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 	set .Point, 0;
 	set .Count, 0;
-	end;
-OnInit:
-	if (getbattleflag("bg_queue_interface")) {
-		.T1$ = "$@BG_SC_Team1";
-		.T2$ = "$@BG_SC_Team2";
-	} else {
-		.T1$ = "$@BG_Team1";
-		.T2$ = "$@BG_Team2";
-	}
 	end;
 }
 
@@ -560,13 +398,9 @@ bat_b04,85,140,0	script	Stone Point::csp4	1309,1,1,{
 	end;
 
 OnTouch:
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_SC != 1)
+	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC" || Hp < 1)
 		end;
-	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC"))
-		end;
-	if (Hp < 1)
-		end;
-	if (.Point != 0 && getcharid(4) == getd(.T1$) && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Guillaume Stole
+	if (.Point != 0 && getcharid(4) == $@BG_Team1 && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Guillaume Stole
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),getcharid(0);
 		setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 
@@ -580,12 +414,11 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,true);
 
 		mapannounce "bat_b04","Croix Stone has been stolen by [ " + strcharinfo(0) + " ]",1,0x0000FF;
-		bg_rankpoints "sc_stole",1,$@sc_stole;
 
 		addtimer 2000, "Flavius_SC::OnFlash";
 		set .Point,0;
 		stopnpctimer;
-	} else if (.Point == 0 && getcharid(4) == getd(.T2$) && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
+	} else if (.Point == 0 && getcharid(4) == $@BG_Team2 && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
 		initnpctimer;
 		set .Point,.@Stone;
 		set .Count, 0;
@@ -594,7 +427,6 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,false);
 
 		mapannounce "bat_b04","Croix Stone captured by [ " + strcharinfo(0) + " ]",1,0xFF0000;
-		bg_rankpoints "sc_captured",1,$@ctf_captured;
 
 		setnpcdisplay strnpcinfo(3),"Croix Stone",1905;
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),0;
@@ -617,15 +449,6 @@ OnBGStop:
 	setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 	set .Point, 0;
 	set .Count, 0;
-	end;
-OnInit:
-	if (getbattleflag("bg_queue_interface")) {
-		.T1$ = "$@BG_SC_Team1";
-		.T2$ = "$@BG_SC_Team2";
-	}else {
-		.T1$ = "$@BG_Team1";
-		.T2$ = "$@BG_Team2";
-	}
 	end;
 }
 
@@ -633,13 +456,9 @@ bat_b04,78,140,0	script	Stone Point::csp5	1309,1,1,{
 	end;
 
 OnTouch:
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_SC != 1)
+	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC" || Hp < 1)
 		end;
-	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC"))
-		end;
-	if (Hp < 1)
-		end;
-	if (.Point != 0 && getcharid(4) == getd(.T1$) && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Guillaume Stole
+	if (.Point != 0 && getcharid(4) == $@BG_Team1 && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Guillaume Stole
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),getcharid(0);
 		setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 
@@ -653,12 +472,11 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,true);
 
 		mapannounce "bat_b04","Croix Stone has been stolen by [ " + strcharinfo(0) + " ]",1,0x0000FF;
-		bg_rankpoints "sc_stole",1,$@sc_stole;
 
 		addtimer 2000, "Flavius_SC::OnFlash";
 		set .Point,0;
 		stopnpctimer;
-	} else if (.Point == 0 && getcharid(4) == getd(.T2$) && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
+	} else if (.Point == 0 && getcharid(4) == $@BG_Team2 && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
 		initnpctimer;
 		set .Point,.@Stone;
 		set .Count, 0;
@@ -667,7 +485,6 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,false);
 
 		mapannounce "bat_b04","Croix Stone captured by [ " + strcharinfo(0) + " ]",1,0xFF0000;
-		bg_rankpoints "sc_captured",1,$@ctf_captured;
 
 		setnpcdisplay strnpcinfo(3),"Croix Stone",1905;
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),0;
@@ -690,15 +507,6 @@ OnBGStop:
 	setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 	set .Point, 0;
 	set .Count, 0;
-	end;
-OnInit:
-	if (getbattleflag("bg_queue_interface")) {
-		.T1$ = "$@BG_SC_Team1";
-		.T2$ = "$@BG_SC_Team2";
-	}else {
-		.T1$ = "$@BG_Team1";
-		.T2$ = "$@BG_Team2";
-	}
 	end;
 }
 
@@ -706,13 +514,9 @@ bat_b04,71,140,0	script	Stone Point::csp6	1309,1,1,{
 	end;
 
 OnTouch:
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_SC != 1)
+	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC" || Hp < 1)
 		end;
-	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC"))
-		end;
-	if (Hp < 1)
-		end;
-	if (.Point != 0 && getcharid(4) == getd(.T1$) && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Guillaume Stole
+	if (.Point != 0 && getcharid(4) == $@BG_Team1 && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Guillaume Stole
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),getcharid(0);
 		setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 
@@ -726,12 +530,11 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,true);
 
 		mapannounce "bat_b04","Croix Stone has been stolen by [ " + strcharinfo(0) + " ]",1,0x0000FF;
-		bg_rankpoints "sc_stole",1,$@sc_stole;
 
 		addtimer 2000, "Flavius_SC::OnFlash";
 		set .Point,0;
 		stopnpctimer;
-	} else if (.Point == 0 && getcharid(4) == getd(.T2$) && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
+	} else if (.Point == 0 && getcharid(4) == $@BG_Team2 && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
 		initnpctimer;
 		set .Point,.@Stone;
 		set .Count, 0;
@@ -740,7 +543,6 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,false);
 
 		mapannounce "bat_b04","Croix Stone captured by [ " + strcharinfo(0) + " ]",1,0xFF0000;
-		bg_rankpoints "sc_captured",1,$@ctf_captured;
 
 		setnpcdisplay strnpcinfo(3),"Croix Stone",1905;
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),0;
@@ -763,15 +565,6 @@ OnBGStop:
 	setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 	set .Point, 0;
 	set .Count, 0;
-	end;
-OnInit:
-	if (getbattleflag("bg_queue_interface")) {
-		.T1$ = "$@BG_SC_Team1";
-		.T2$ = "$@BG_SC_Team2";
-	} else {
-		.T1$ = "$@BG_Team1";
-		.T2$ = "$@BG_Team2";
-	}
 	end;
 }
 
@@ -782,13 +575,9 @@ bat_b04,312,159,0	script	Stone Point::gsp1	1309,1,1,{
 	end;
 
 OnTouch:
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_SC != 1)
+	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC" || Hp < 1)
 		end;
-	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC"))
-		end;
-	if (Hp < 1)
-		end;
-	if (.Point != 0 && getcharid(4) == getd(.T2$) && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Croix Stole
+	if (.Point != 0 && getcharid(4) == $@BG_Team2 && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Croix Stole
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),getcharid(0);
 		setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 
@@ -802,12 +591,11 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,true);
 
 		mapannounce "bat_b04","Guillaume Stone has been stolen by [ " + strcharinfo(0) + " ]",1,0xFF0000;
-		bg_rankpoints "sc_stole",1,$@sc_stole;
 
 		addtimer 2000, "Flavius_SC::OnFlash";
 		set .Point,0;
 		stopnpctimer;
-	} else if (.Point == 0 && getcharid(4) == getd(.T1$) && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
+	} else if (.Point == 0 && getcharid(4) == $@BG_Team1 && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
 		initnpctimer;
 		set .Point,.@Stone;
 		set .Count, 0;
@@ -816,7 +604,6 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,false);
 
 		mapannounce "bat_b04","Guillaume Stone captured by [ " + strcharinfo(0) + " ]",1,0x0000FF;
-		bg_rankpoints "sc_captured",1,$@ctf_captured;
 
 		setnpcdisplay strnpcinfo(3),"Guillaume Stone",1905;
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),0;
@@ -839,15 +626,6 @@ OnBGStop:
 	setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 	set .Point, 0;
 	set .Count, 0;
-	end;
-OnInit:
-	if (getbattleflag("bg_queue_interface")) {
-		.T1$ = "$@BG_SC_Team1";
-		.T2$ = "$@BG_SC_Team2";
-	} else {
-		.T1$ = "$@BG_Team1";
-		.T2$ = "$@BG_Team2";
-	}
 	end;
 }
 
@@ -855,13 +633,9 @@ bat_b04,319,159,0	script	Stone Point::gsp2	1309,1,1,{
 	end;
 
 OnTouch:
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_SC != 1)
+	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC" || Hp < 1)
 		end;
-	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC"))
-		end;
-	if (Hp < 1)
-		end;
-	if (.Point != 0 && getcharid(4) == getd(.T2$) && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Croix Stole
+	if (.Point != 0 && getcharid(4) == $@BG_Team2 && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Croix Stole
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),getcharid(0);
 		setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 
@@ -875,12 +649,11 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,true);
 
 		mapannounce "bat_b04","Guillaume Stone has been stolen by [ " + strcharinfo(0) + " ]",1,0xFF0000;
-		bg_rankpoints "sc_stole",1,$@sc_stole;
 
 		addtimer 2000, "Flavius_SC::OnFlash";
 		set .Point,0;
 		stopnpctimer;
-	} else if (.Point == 0 && getcharid(4) == getd(.T1$) && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
+	} else if (.Point == 0 && getcharid(4) == $@BG_Team1 && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
 		initnpctimer;
 		set .Point,.@Stone;
 		set .Count, 0;
@@ -889,7 +662,6 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,false);
 
 		mapannounce "bat_b04","Guillaume Stone captured by [ " + strcharinfo(0) + " ]",1,0x0000FF;
-		bg_rankpoints "sc_captured",1,$@ctf_captured;
 
 		setnpcdisplay strnpcinfo(3),"Guillaume Stone",1905;
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),0;
@@ -912,15 +684,6 @@ OnBGStop:
 	setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 	set .Point, 0;
 	set .Count, 0;
-	end;
-OnInit:
-	if (getbattleflag("bg_queue_interface")) {
-		.T1$ = "$@BG_SC_Team1";
-		.T2$ = "$@BG_SC_Team2";
-	} else {
-		.T1$ = "$@BG_Team1";
-		.T2$ = "$@BG_Team2";
-	}
 	end;
 }
 
@@ -928,13 +691,9 @@ bat_b04,326,159,0	script	Stone Point::gsp3	1309,1,1,{
 	end;
 
 OnTouch:
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_SC != 1)
+	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC" || Hp < 1)
 		end;
-	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC"))
-		end;
-	if (Hp < 1)
-		end;
-	if (.Point != 0 && getcharid(4) == getd(.T2$) && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Croix Stole
+	if (.Point != 0 && getcharid(4) == $@BG_Team2 && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Croix Stole
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),getcharid(0);
 		setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 
@@ -948,12 +707,11 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,true);
 
 		mapannounce "bat_b04","Guillaume Stone has been stolen by [ " + strcharinfo(0) + " ]",1,0xFF0000;
-		bg_rankpoints "sc_stole",1,$@sc_stole;
 
 		addtimer 2000, "Flavius_SC::OnFlash";
 		set .Point,0;
 		stopnpctimer;
-	} else if (.Point == 0 && getcharid(4) == getd(.T1$) && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
+	} else if (.Point == 0 && getcharid(4) == $@BG_Team1 && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
 		initnpctimer;
 		set .Point,.@Stone;
 		set .Count, 0;
@@ -962,7 +720,6 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,false);
 
 		mapannounce "bat_b04","Guillaume Stone captured by [ " + strcharinfo(0) + " ]",1,0x0000FF;
-		bg_rankpoints "sc_captured",1,$@ctf_captured;
 
 		setnpcdisplay strnpcinfo(3),"Guillaume Stone",1905;
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),0;
@@ -985,15 +742,6 @@ OnBGStop:
 	setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 	set .Point, 0;
 	set .Count, 0;
-	end;
-OnInit:
-	if (getbattleflag("bg_queue_interface")) {
-		.T1$ = "$@BG_SC_Team1";
-		.T2$ = "$@BG_SC_Team2";
-	} else {
-		.T1$ = "$@BG_Team1";
-		.T2$ = "$@BG_Team2";
-	}
 	end;
 }
 
@@ -1001,13 +749,9 @@ bat_b04,312,140,0	script	Stone Point::gsp4	1309,1,1,{
 	end;
 
 OnTouch:
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_SC != 1)
+	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC" || Hp < 1)
 		end;
-	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC"))
-		end;
-	if (Hp < 1)
-		end;
-	if (.Point != 0 && getcharid(4) == getd(.T2$) && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Croix Stole
+	if (.Point != 0 && getcharid(4) == $@BG_Team2 && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Croix Stole
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),getcharid(0);
 		setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 
@@ -1021,12 +765,11 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,true);
 
 		mapannounce "bat_b04","Guillaume Stone has been stolen by [ " + strcharinfo(0) + " ]",1,0xFF0000;
-		bg_rankpoints "sc_stole",1,$@sc_stole;
 
 		addtimer 2000, "Flavius_SC::OnFlash";
 		set .Point,0;
 		stopnpctimer;
-	} else if (.Point == 0 && getcharid(4) == getd(.T1$) && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
+	} else if (.Point == 0 && getcharid(4) == $@BG_Team1 && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
 		initnpctimer;
 		set .Point,.@Stone;
 		set .Count, 0;
@@ -1035,7 +778,6 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,false);
 
 		mapannounce "bat_b04","Guillaume Stone captured by [ " + strcharinfo(0) + " ]",1,0x0000FF;
-		bg_rankpoints "sc_captured",1,$@ctf_captured;
 
 		setnpcdisplay strnpcinfo(3),"Guillaume Stone",1905;
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),0;
@@ -1058,15 +800,6 @@ OnBGStop:
 	setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 	set .Point, 0;
 	set .Count, 0;
-	end;
-OnInit:
-	if (getbattleflag("bg_queue_interface")) {
-		.T1$ = "$@BG_SC_Team1";
-		.T2$ = "$@BG_SC_Team2";
-	} else {
-		.T1$ = "$@BG_Team1";
-		.T2$ = "$@BG_Team2";
-	}
 	end;
 }
 
@@ -1074,13 +807,9 @@ bat_b04,319,140,0	script	Stone Point::gsp5	1309,1,1,{
 	end;
 
 OnTouch:
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_SC != 1)
+	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC" || Hp < 1)
 		end;
-	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC"))
-		end;
-	if (Hp < 1)
-		end;
-	if (.Point != 0 && getcharid(4) == getd(.T2$) && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Croix Stole
+	if (.Point != 0 && getcharid(4) == $@BG_Team2 && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Croix Stole
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),getcharid(0);
 		setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 
@@ -1094,12 +823,11 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,true);
 
 		mapannounce "bat_b04","Guillaume Stone has been stolen by [ " + strcharinfo(0) + " ]",1,0xFF0000;
-		bg_rankpoints "sc_stole",1,$@sc_stole;
 
 		addtimer 2000, "Flavius_SC::OnFlash";
 		set .Point,0;
 		stopnpctimer;
-	} else if (.Point == 0 && getcharid(4) == getd(.T1$) && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
+	} else if (.Point == 0 && getcharid(4) == $@BG_Team1 && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
 		initnpctimer;
 		set .Point,.@Stone;
 		set .Count, 0;
@@ -1108,7 +836,6 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,false);
 
 		mapannounce "bat_b04","Guillaume Stone captured by [ " + strcharinfo(0) + " ]",1,0x0000FF;
-		bg_rankpoints "sc_captured",1,$@ctf_captured;
 
 		setnpcdisplay strnpcinfo(3),"Guillaume Stone",1905;
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),0;
@@ -1131,15 +858,6 @@ OnBGStop:
 	setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 	set .Point, 0;
 	set .Count, 0;
-	end;
-OnInit:
-	if (getbattleflag("bg_queue_interface")) {
-		.T1$ = "$@BG_SC_Team1";
-		.T2$ = "$@BG_SC_Team2";
-	} else {
-		.T1$ = "$@BG_Team1";
-		.T2$ = "$@BG_Team2";
-	}
 	end;
 }
 
@@ -1147,13 +865,9 @@ bat_b04,326,140,0	script	Stone Point::gsp6	1309,1,1,{
 	end;
 
 OnTouch:
-	if (getbattleflag("bg_queue_interface") && $@BG_Status_SC != 1)
+	if ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC" || Hp < 1)
 		end;
-	if (!getbattleflag("bg_queue_interface") && ($@BG_Status != 1 || getvariableofnpc(.BG_Arena$,"BG_Queue_Join") != "Flavius_SC"))
-		end;
-	if (Hp < 1)
-		end;
-	if (.Point != 0 && getcharid(4) == getd(.T2$) && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Croix Stole
+	if (.Point != 0 && getcharid(4) == $@BG_Team2 && callfunc("SC_StoneCheck",getcharid(0)) == 0) { // Croix Stole
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),getcharid(0);
 		setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 
@@ -1167,12 +881,11 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,true);
 
 		mapannounce "bat_b04","Guillaume Stone has been stolen by [ " + strcharinfo(0) + " ]",1,0xFF0000;
-		bg_rankpoints "sc_stole",1,$@sc_stole;
 
 		addtimer 2000, "Flavius_SC::OnFlash";
 		set .Point,0;
 		stopnpctimer;
-	} else if (.Point == 0 && getcharid(4) == getd(.T1$) && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
+	} else if (.Point == 0 && getcharid(4) == $@BG_Team1 && set(.@Stone,callfunc("SC_StoneCheck",getcharid(0))) > 0) { // Check if user got a Stone
 		initnpctimer;
 		set .Point,.@Stone;
 		set .Count, 0;
@@ -1181,7 +894,6 @@ OnTouch:
 		setpcblock(PCBLOCK_SKILL|PCBLOCK_USEITEM,false);
 
 		mapannounce "bat_b04","Guillaume Stone captured by [ " + strcharinfo(0) + " ]",1,0x0000FF;
-		bg_rankpoints "sc_captured",1,$@ctf_captured;
 
 		setnpcdisplay strnpcinfo(3),"Guillaume Stone",1905;
 		set getvariableofnpc(.Stone[.Point],"Flavius_SC"),0;
@@ -1204,15 +916,6 @@ OnBGStop:
 	setnpcdisplay strnpcinfo(3),"Stone Point",1309;
 	set .Point, 0;
 	set .Count, 0;
-	end;
-OnInit:
-	if (getbattleflag("bg_queue_interface")) {
-		.T1$ = "$@BG_SC_Team1";
-		.T2$ = "$@BG_SC_Team2";
-	} else {
-		.T1$ = "$@BG_Team1";
-		.T2$ = "$@BG_Team2";
-	}
 	end;
 }
 

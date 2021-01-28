@@ -1565,7 +1565,6 @@
 	export_constant(SC_LHZ_DUN_N3);
 	export_constant(SC_LHZ_DUN_N4);
 	export_constant(SC_ANCILLA);
-	export_constant(SC_ENTRY_QUEUE_APPLY_DELAY);
 	export_constant(SC_EARTHSHAKER);
 	export_constant(SC_WEAPONBLOCK_ON);
 	export_constant(SC_ADAPTATION);
@@ -5199,19 +5198,7 @@
 	export_constant2("AG_SEE", AG_SEE);
 	export_constant2("AG_SPEND_ZENY", AG_SPEND_ZENY);
 	export_constant2("AG_TAMING", AG_TAMING);
-	// Extended Features
-	export_constant2("AG_BG_WIN",AG_BG_WIN);
-	export_constant2("AG_BG_LOSE",AG_BG_LOSE);
-	export_constant2("AG_BG_TIE",AG_BG_TIE);
-	export_constant2("AG_BG_KILL",AG_BG_KILL);
-	export_constant2("AG_BG_DIE",AG_BG_DIE);
-	export_constant2("AG_BG_DAMAGE",AG_BG_DAMAGE);
-	export_constant2("AG_BG_HEAL",AG_BG_HEAL);
-	export_constant2("AG_WOE_KILL",AG_WOE_KILL);
-	export_constant2("AG_WOE_DIE",AG_WOE_DIE);
-	export_constant2("AG_WOE_DAMAGE",AG_WOE_DAMAGE);
-	export_constant2("AG_WOE_HEAL",AG_WOE_HEAL);
-	
+
 	/* achievement info */
 	export_constant(ACHIEVEINFO_COUNT1);
 	export_constant(ACHIEVEINFO_COUNT2);
