@@ -828,8 +828,6 @@ bool skill_isNotOk(uint16 skill_id, struct map_session_data *sd)
 	}
 
 	if (skill_blockpc_get(sd, skill_id) != -1){
-		if (skill_id >= 10010 && skill_id <= 10013)
-			clif_displaymessage(sd->fd,"[Guild Skill] Cannot use the skill due to cooldown delay"); 
 		clif_skill_fail(sd,skill_id,USESKILL_FAIL_SKILLINTERVAL,0);
 		return true;
 	}
@@ -921,14 +919,10 @@ bool skill_isNotOk(uint16 skill_id, struct map_session_data *sd)
 			break;
 		case GD_EMERGENCYCALL:
 		case GD_ITEMEMERGENCYCALL:
-			if (mapdata->flag[MF_NOECALL]) {
-				clif_displaymessage(sd->fd,"Cannot use Emergency Call in this map.");
-				return true;
-			}
 			if (
-				!mapdata->flag[MF_BATTLEGROUND] && (!(battle_config.emergency_call&((is_agit_start())?2:1)) ||
+				!(battle_config.emergency_call&((is_agit_start())?2:1)) ||
 				!(battle_config.emergency_call&(mapdata_flag_gvg2(mapdata)?8:4)) ||
-				(battle_config.emergency_call&16 && mapdata->flag[MF_NOWARPTO] && !(mapdata->flag[MF_GVG_CASTLE] || mapdata->flag[MF_GVG_TE_CASTLE])))
+				(battle_config.emergency_call&16 && mapdata->flag[MF_NOWARPTO] && !(mapdata->flag[MF_GVG_CASTLE] || mapdata->flag[MF_GVG_TE_CASTLE]))
 			)	{
 				clif_skill_fail(sd,skill_id,USESKILL_FAIL_LEVEL,0);
 				return true;
@@ -2036,6 +2030,7 @@ int skill_additional_effect(struct block_list* src, struct block_list *bl, uint1
 					case SC_WEDDING:		case SC_XMAS:			case SC_SUMMER:
 					case SC_DRESSUP:		case SC_HANBOK:			case SC_OKTOBERFEST:
 					case SC_LHZ_DUN_N1:		case SC_LHZ_DUN_N2:			case SC_LHZ_DUN_N3:			case SC_LHZ_DUN_N4:
+					case SC_ENTRY_QUEUE_APPLY_DELAY:	case SC_ENTRY_QUEUE_NOTIFY_ADMISSION_TIME_OUT:
 					case SC_REUSE_LIMIT_LUXANIMA:	case SC_LUXANIMA:	case SC_SOULENERGY:
 					case SC_EP16_2_BUFF_SS:		case SC_EP16_2_BUFF_SC:	case SC_EP16_2_BUFF_AC:
 					case SC_EMERGENCY_MOVE:
@@ -8481,6 +8476,7 @@ int skill_castend_nodamage_id (struct block_list *src, struct block_list *bl, ui
 					case SC_SPRITEMABLE:		case SC_BITESCAR:	case SC_CRUSHSTRIKE:
 					case SC_QUEST_BUFF1:	case SC_QUEST_BUFF2:	case SC_QUEST_BUFF3:
 					case SC_ARMOR_ELEMENT_EARTH:	case SC_ARMOR_ELEMENT_FIRE:	case SC_ARMOR_ELEMENT_WIND:
+					case SC_ENTRY_QUEUE_APPLY_DELAY:	case SC_ENTRY_QUEUE_NOTIFY_ADMISSION_TIME_OUT:
 					// Clans
 					case SC_CLAN_INFO:
 					case SC_SWORDCLAN:
@@ -9366,28 +9362,24 @@ int skill_castend_nodamage_id (struct block_list *src, struct block_list *bl, ui
 	case GD_RESTORE:
 	case GD_EMERGENCY_MOVE:
 		if(flag&1) {
-			if (status_get_guild_id(src) == status_get_guild_id(bl) || (map_getmapflag(src->m, MF_BATTLEGROUND) && bg_team_get_id(src) == bg_team_get_id(bl)))		
+			if (status_get_guild_id(src) == status_get_guild_id(bl)) {				
 				if( skill_id == GD_RESTORE )
 					clif_skill_nodamage(src,bl,AL_HEAL,status_percent_heal(bl,90,90),1);
 				else
 					sc_start(src,bl,type,100,skill_lv,skill_get_time(skill_id, skill_lv));
-		} else if (status_get_guild_id(src) || (map_getmapflag(src->m, MF_BATTLEGROUND) && bg_team_get_id(src))) {
+			}
+		} else if (status_get_guild_id(src)) {
 			clif_skill_nodamage(src,bl,skill_id,skill_lv,1);
 			map_foreachinallrange(skill_area_sub, src,
 				skill_get_splash(skill_id, skill_lv), BL_PC,
 				src,skill_id,skill_lv,tick, flag|BCT_GUILD|1,
 				skill_castend_nodamage_id);
-			if (sd){
-				struct battleground_data *bgd = bg_team_search(sd->bg_id);
-				if (sd->bg_id)
-					bg_block_skill_start(bgd, skill_id, skill_get_time2(skill_id, skill_lv));
-				else
+			if (sd)
 #ifdef RENEWAL
-					skill_blockpc_start(sd, skill_id, skill_get_cooldown(skill_id, skill_lv));
+				skill_blockpc_start(sd, skill_id, skill_get_cooldown(skill_id, skill_lv));
 #else
-					guild_block_skill(sd, skill_get_time2(skill_id, skill_lv));
+				guild_block_skill(sd, skill_get_time2(skill_id, skill_lv));
 #endif
-			}
 		}
 		break;
 	case GD_EMERGENCYCALL:
@@ -9396,18 +9388,10 @@ int skill_castend_nodamage_id (struct block_list *src, struct block_list *bl, ui
 			int8 dx[9] = {-1, 1, 0, 0,-1, 1,-1, 1, 0};
 			int8 dy[9] = { 0, 0, 1,-1, 1,-1,-1, 1, 0};
 			uint8 j = 0, calls = 0, called = 0;
-			struct guild *g = NULL;
-			struct battleground_data *bg = NULL;
-			int max_member;
+			struct guild *g;
 			// i don't know if it actually summons in a circle, but oh well. ;P
-			if (map_getmapflag(src->m, MF_BATTLEGROUND) && bg_team_get_id(src)) {
-				bg = bg_team_search(sd->bg_id);
-				max_member = MAX_BG_MEMBERS;
-			} else {
-				g = sd?sd->guild:guild_search(status_get_guild_id(src));
-				max_member = g->max_member;
-			}
-			if (!g && !bg)
+			g = sd?sd->guild:guild_search(status_get_guild_id(src));
+			if (!g)
 				break;
 
 			if (skill_id == GD_ITEMEMERGENCYCALL)
@@ -9419,11 +9403,11 @@ int skill_castend_nodamage_id (struct block_list *src, struct block_list *bl, ui
 				}
 
 			clif_skill_nodamage(src,bl,skill_id,skill_lv,1);
-			for (i = 0; i < max_member && (!calls || (calls && called < calls)); i++, j++) {
+			for (i = 0; i < g->max_member && (!calls || (calls && called < calls)); i++, j++) {
 				if (j > 8)
 					j = 0;
-				if ((dstsd = bg?bg->members[i].sd:g->member[i].sd) != NULL && sd != dstsd && !dstsd->state.autotrade && !pc_isdead(dstsd)) {
-					if (map_getmapflag(dstsd->bl.m, MF_NOWARP) && !map_flag_gvg2(dstsd->bl.m) && !bg)
+				if ((dstsd = g->member[i].sd) != NULL && sd != dstsd && !dstsd->state.autotrade && !pc_isdead(dstsd)) {
+					if (map_getmapflag(dstsd->bl.m, MF_NOWARP) && !map_flag_gvg2(dstsd->bl.m))
 						continue;
 					if (!pc_job_can_entermap((enum e_job)dstsd->status.class_, src->m, dstsd->group_level))
 						continue;
@@ -9433,17 +9417,12 @@ int skill_castend_nodamage_id (struct block_list *src, struct block_list *bl, ui
 						called++;
 				}
 			}
-			if (sd){
-				struct battleground_data *bgd = bg_team_search(sd->bg_id);
-				if (sd->bg_id)
-					bg_block_skill_start(bgd, skill_id, skill_get_time2(skill_id, skill_lv));
-				else
+			if (sd)
 #ifdef RENEWAL
-					skill_blockpc_start(sd, skill_id, skill_get_cooldown(skill_id, skill_lv));
+				skill_blockpc_start(sd, skill_id, skill_get_cooldown(skill_id, skill_lv));
 #else
-					guild_block_skill(sd, skill_get_time2(skill_id, skill_lv));
+				guild_block_skill(sd, skill_get_time2(skill_id, skill_lv));
 #endif
-			}
 		}
 		break;
 	case GD_CHARGESHOUT_FLAG:
@@ -10038,6 +10017,7 @@ int skill_castend_nodamage_id (struct block_list *src, struct block_list *bl, ui
 					case SC_WEDDING:		case SC_XMAS:			case SC_SUMMER:
 					case SC_DRESSUP:		case SC_HANBOK:			case SC_OKTOBERFEST:
 					case SC_LHZ_DUN_N1:		case SC_LHZ_DUN_N2:			case SC_LHZ_DUN_N3:			case SC_LHZ_DUN_N4:
+					case SC_ENTRY_QUEUE_APPLY_DELAY:	case SC_ENTRY_QUEUE_NOTIFY_ADMISSION_TIME_OUT:
 					case SC_REUSE_LIMIT_LUXANIMA:		case SC_LUXANIMA:	case SC_SOULENERGY:
 					case SC_EP16_2_BUFF_SS:		case SC_EP16_2_BUFF_SC:	case SC_EP16_2_BUFF_AC:
 					case SC_EMERGENCY_MOVE:
@@ -15971,17 +15951,14 @@ bool skill_check_condition_castbegin(struct map_session_data* sd, uint16 skill_i
 		case GD_CHARGESHOUT_FLAG:
 		case GD_CHARGESHOUT_BEATING:
 		case GD_EMERGENCY_MOVE:
-			if (!(map_flag_gvg2(sd->bl.m) || map_getmapflag(sd->bl.m, MF_BATTLEGROUND))) {
+			if (!map_flag_gvg2(sd->bl.m)) {
 				clif_skill_fail(sd,skill_id,USESKILL_FAIL_LEVEL,0);
 				return false;
 			}
 		case GD_EMERGENCYCALL:
 		case GD_ITEMEMERGENCYCALL:
 			// other checks were already done in skill_isNotOk()
-			if (map_getmapflag(sd->bl.m, MF_BATTLEGROUND)) {
-				if( !sd->bg_id || !sd->bmaster_flag )
-					return false; // Not Team Leader on Battleground
-			} else if (!sd->status.guild_id || (sd->state.gmaster_flag == 0 && skill_id != GD_CHARGESHOUT_BEATING))
+			if (!sd->status.guild_id || (sd->state.gmaster_flag == 0 && skill_id != GD_CHARGESHOUT_BEATING))
 				return false;
 			break;
 
@@ -16738,13 +16715,7 @@ bool skill_check_condition_castend(struct map_session_data* sd, uint16 skill_id,
 		if( !require.itemid[i] )
 			continue;
 		index[i] = pc_search_inventory(sd,require.itemid[i]);
-		if( index[i] < 0 || sd->inventory.u.items_inventory[index[i]].amount < require.amount[i] ||
-			sd->inventory.u.items_inventory[index[i]].card[0] == CARD0_CREATE && 
-			((MakeDWord(sd->inventory.u.items_inventory[index[i]].card[2], sd->inventory.u.items_inventory[index[i]].card[3]) == 
-			battle_config.bg_reserved_char_id && !map_getmapflag(sd->bl.m, MF_BG_CONSUME)) ||
-			(MakeDWord(sd->inventory.u.items_inventory[index[i]].card[2], sd->inventory.u.items_inventory[index[i]].card[3]) == 
-			battle_config.woe_reserved_char_id && !map_getmapflag(sd->bl.m, MF_WOE_CONSUME)))
-		) {
+		if( index[i] < 0 || sd->inventory.u.items_inventory[index[i]].amount < require.amount[i] ) {
 			if( require.itemid[i] == ITEMID_HOLY_WATER )
 				clif_skill_fail(sd,skill_id,USESKILL_FAIL_HOLYWATER,0); //Holy water is required.
 			else if( require.itemid[i] == ITEMID_RED_GEMSTONE )

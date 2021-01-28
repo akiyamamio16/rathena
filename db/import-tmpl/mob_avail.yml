@@ -41,13 +41,7 @@
 Header:
   Type: MOB_AVAIL_DB
   Version: 1
-Body:
-  - Mob: BG_STONE_1
-    Sprite: S_EMPEL_1
-  - Mob: BG_STONE_2
-    Sprite: S_EMPEL_2
-  - Mob: BG_EMPELIUM
-    Sprite: EMPELIUM
+
 #Body:
   # Examples
 #  - Mob: PORING

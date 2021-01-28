@@ -2059,7 +2059,10 @@ int map_quit(struct map_session_data *sd) {
 		npc_event_dequeue(sd);
 
 	if (sd->bg_id)
-		bg_team_leave(sd,1);
+		bg_team_leave(sd, true, true);
+
+	if (sd->bg_queue_id > 0)
+		bg_queue_leave(sd);
 
 	if( sd->status.clan_id )
 		clan_member_left(sd);
@@ -5243,9 +5246,9 @@ int do_init(int argc, char *argv[])
 	do_init_elemental();
 	do_init_quest();
 	do_init_achievement();
+	do_init_battleground();
 	do_init_npc();
 	do_init_unit();
-	do_init_battleground();
 	do_init_duel();
 	do_init_vending();
 	do_init_buyingstore();

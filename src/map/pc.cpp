@@ -448,6 +448,54 @@ int pc_get_group_level(struct map_session_data *sd) {
 	return sd->group_level;
 }
 
+/**
+ * Remove a player from queue after timeout
+ * @param tid: Timer ID
+ * @param tick: Timer
+ * @param id: ID
+ * @return 0 on success or 1 otherwise
+ */
+static TIMER_FUNC(pc_on_expire_active)
+{
+	map_session_data *sd = (map_session_data *)data;
+
+	nullpo_retr(1, sd);
+
+	sd->tid_queue_active = INVALID_TIMER;
+
+	bg_queue_leave(sd);
+	clif_bg_queue_entry_init(sd);
+	return 0;
+}
+
+/**
+ * Function used to set timer externally
+ * @param sd: Player data
+ */
+void pc_set_bg_queue_timer(map_session_data *sd) {
+	nullpo_retv(sd);
+
+	if (sd->tid_queue_active != INVALID_TIMER) {
+		delete_timer(sd->tid_queue_active, pc_on_expire_active);
+		sd->tid_queue_active = INVALID_TIMER;
+	}
+
+	sd->tid_queue_active = add_timer(gettick() + 20000, pc_on_expire_active, 0, (intptr_t)sd);
+}
+
+/**
+ * Function used to delete timer externally
+ * @param sd: Player data
+ */
+void pc_delete_bg_queue_timer(map_session_data *sd) {
+	nullpo_retv(sd);
+
+	if (sd->tid_queue_active != INVALID_TIMER) {
+		delete_timer(sd->tid_queue_active, pc_on_expire_active);
+		sd->tid_queue_active = INVALID_TIMER;
+	}
+}
+
 static TIMER_FUNC(pc_invincible_timer){
 	struct map_session_data *sd;
 
@@ -1558,6 +1606,7 @@ bool pc_authok(struct map_session_data *sd, uint32 login_id2, time_t expiration_
 	sd->expiration_tid = INVALID_TIMER;
 	sd->autotrade_tid = INVALID_TIMER;
 	sd->respawn_tid = INVALID_TIMER;
+	sd->tid_queue_active = INVALID_TIMER;
 
 	sd->skill_keep_using.tid = INVALID_TIMER;
 	sd->skill_keep_using.skill_id = 0;
@@ -1706,6 +1755,9 @@ bool pc_authok(struct map_session_data *sd, uint32 login_id2, time_t expiration_
 	
 	sd->bonus_script.head = NULL;
 	sd->bonus_script.count = 0;
+
+	// Initialize BG queue
+	sd->bg_queue_id = 0;
 
 #if PACKETVER_MAIN_NUM >= 20150507 || PACKETVER_RE_NUM >= 20150429 || defined(PACKETVER_ZERO)
 	sd->hatEffects = {};
@@ -5052,18 +5104,9 @@ int pc_getcash(struct map_session_data *sd, int cash, int points, e_log_pick_typ
  * @return Stored index in inventory, or -1 if not found.
  **/
 short pc_search_inventory(struct map_session_data *sd, t_itemid nameid) {
-	short i,x,y;
+	short i;
 	nullpo_retr(-1, sd);
 
-	if (map_getmapflag(sd->bl.m, MF_BG_CONSUME)) {
-		ARR_FIND( 0, MAX_INVENTORY, x, sd->inventory.u.items_inventory[x].nameid == nameid && ( MakeDWord(sd->inventory.u.items_inventory[x].card[2], sd->inventory.u.items_inventory[x].card[3]) == battle_config.bg_reserved_char_id ) && (sd->inventory.u.items_inventory[x].amount > 0 || nameid == 0) );
-			if( x < MAX_INVENTORY ) return x;
-	}
-	if (map_getmapflag(sd->bl.m, MF_WOE_CONSUME)) {
-		ARR_FIND( 0, MAX_INVENTORY, y, sd->inventory.u.items_inventory[y].nameid == nameid && ( MakeDWord(sd->inventory.u.items_inventory[y].card[2], sd->inventory.u.items_inventory[y].card[3]) == battle_config.woe_reserved_char_id ) && (sd->inventory.u.items_inventory[y].amount > 0 || nameid == 0) );
-			if( y < MAX_INVENTORY ) return y;
-	}
-	
 	ARR_FIND( 0, MAX_INVENTORY, i, sd->inventory.u.items_inventory[i].nameid == nameid && (sd->inventory.u.items_inventory[i].amount > 0 || nameid == 0) );
 	return ( i < MAX_INVENTORY ) ? i : -1;
 }
@@ -5583,13 +5626,6 @@ int pc_useitem(struct map_session_data *sd,int n)
 		return 0;/* regardless, effect is not run */
 	}
 
-	if( sd->inventory.u.items_inventory[n].card[0] == CARD0_CREATE) {
-		if (MakeDWord(sd->inventory.u.items_inventory[n].card[2], sd->inventory.u.items_inventory[n].card[3]) == battle_config.bg_reserved_char_id && !map_getmapflag(sd->bl.m, MF_BG_CONSUME))
-			return 0;
-		if (MakeDWord(sd->inventory.u.items_inventory[n].card[2], sd->inventory.u.items_inventory[n].card[3]) == battle_config.woe_reserved_char_id && !map_getmapflag(sd->bl.m, MF_WOE_CONSUME))
-			return 0;
-	}
-	
 	sd->itemid = item.nameid;
 	sd->itemindex = n;
 	if(sd->catch_target_class != PET_CATCH_FAIL) //Abort pet catching.
@@ -6027,7 +6063,7 @@ enum e_setpos pc_setpos(struct map_session_data* sd, unsigned short mapindex, in
 		}
 
 		if (sd->bg_id && !mapdata->flag[MF_BATTLEGROUND]) // Moving to a map that isn't a Battlegrounds
-			bg_team_leave(sd,0);
+			bg_team_leave(sd, false, true);
 
 		sd->state.pmap = sd->bl.m;
 		if (sc && sc->count) { // Cancel some map related stuff.
@@ -8663,10 +8699,13 @@ int pc_dead(struct map_session_data *sd,struct block_list *src)
 		return 1|8;
 	}
 	else if( sd->bg_id ) {
-		struct battleground_data *bg = bg_team_search(sd->bg_id);
-		if( bg && bg->mapindex > 0 ) { // Respawn by BG
-			sd->respawn_tid = add_timer(tick+1000, pc_respawn_timer, sd->bl.id, 0);
-			return 1|8;
+		std::shared_ptr<s_battleground_data> bg = util::umap_find(bg_team_db, sd->bg_id);
+
+		if (bg) {
+			if (bg->cemetery.map > 0) { // Respawn by BG
+				sd->respawn_tid = add_timer(tick + 1000, pc_respawn_timer, sd->bl.id, 0);
+				return 1|8;
+			}
 		}
 	}
 
@@ -9806,12 +9845,6 @@ bool pc_candrop(struct map_session_data *sd, struct item *item)
 		return false;
 	if( !pc_can_give_items(sd) || sd->sc.cant.drop) //check if this GM level can drop items
 		return false;
-	if( item->card[0] == CARD0_CREATE) {
-		if (MakeDWord(item->card[2], item->card[3]) == battle_config.bg_reserved_char_id)
-			return false;
-		if (MakeDWord(item->card[2], item->card[3]) == battle_config.woe_reserved_char_id)
-			return false;
-	}
 	return (itemdb_isdropable(item, pc_get_group_level(sd)));
 }
 
@@ -13494,27 +13527,6 @@ void pc_set_costume_view(struct map_session_data *sd) {
 		clif_changelook(&sd->bl, LOOK_ROBE, sd->status.robe);
 }
 
-/***********************************************************
-* Update Idle PC Timer
-***********************************************************/
-int pc_update_last_action(struct map_session_data *sd)
-{
-	struct battleground_data *bgd;
-	int64 tick = gettick();
-
-	sd->idletime = last_tick;
-
-	if (sd->bg_id && sd->state.bg_afk && (bgd = bg_team_search(sd->bg_id)) != NULL && bgd->g)
-	{ // Battleground AFK announce
-		char output[128];
-		sprintf(output, "%s : %s is no longer away...", bgd->g->name, sd->status.name);
-		clif_bg_message(bgd, bgd->bg_id, bgd->g->name, output, strlen(output) + 1);
-		sd->state.bg_afk = 0;
-	}
-
-	return 1;
-}
-
 std::shared_ptr<s_attendance_period> pc_attendance_period(){
 	uint32 date = date_get(DT_YYYYMMDD);
 
@@ -13660,6 +13672,7 @@ void do_init_pc(void) {
 	add_timer_func_list(pc_global_expiration_timer, "pc_global_expiration_timer");
 	add_timer_func_list(pc_expiration_timer, "pc_expiration_timer");
 	add_timer_func_list(pc_autotrade_timer, "pc_autotrade_timer");
+	add_timer_func_list(pc_on_expire_active, "pc_on_expire_active");
 
 	add_timer(gettick() + autosave_interval, pc_autosave, 0, 0);
 

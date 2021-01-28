@@ -52,7 +52,3 @@
 Header:
   Type: QUEST_DB
   Version: 1
-Body:
-  - Id: 8600
-    Title: Battleground Cooldown
-    TimeLimit: +3mn
