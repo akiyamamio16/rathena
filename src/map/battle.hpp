@@ -427,8 +427,6 @@ struct Battle_Config
 	int display_hallucination;	// [Skotlex]
 	int use_statpoint_table;	// [Skotlex]
 
-	int ignore_items_gender; //[Lupus]
-
 	int berserk_cancels_buffs; // [Aru]
 	int debuff_on_logout; // Removes a few "official" negative Scs on logout. [Skotlex]
 	int mob_ai; //Configures various mob_ai settings to make them smarter or dumber(official). [Skotlex]
@@ -529,6 +527,7 @@ struct Battle_Config
 	int max_extended_parameter;
 	int max_summoner_parameter;
 	int max_third_aspd;
+	int max_summoner_aspd;
 	int vcast_stat_scale;
 
 	int mvp_tomb_enabled;
@@ -622,6 +621,7 @@ struct Battle_Config
 	int mob_eye_range_bonus; //Vulture's Eye and Snake's Eye range bonus
 	int mob_stuck_warning; //Show warning if a monster is stuck too long
 	int skill_eightpath_algorithm; //Official path algorithm
+	int skill_eightpath_same_cell;
 	int death_penalty_maxlv;
 	int exp_cost_redemptio;
 	int exp_cost_redemptio_limit;
@@ -657,7 +657,8 @@ struct Battle_Config
 	int switch_remove_edp;
 	int feature_homunculus_autofeed;
 	int feature_homunculus_autofeed_rate;
-	int summoner_trait;
+	int summoner_race;
+	int summoner_size;
 	int homunculus_autofeed_always;
 	int feature_attendance;
 	int feature_privateairship;
@@ -682,6 +683,13 @@ struct Battle_Config
 	int ping_time;
 	int show_skill_scale;
 	int feature_refineui;
+	int achievement_mob_share;
+	int slave_stick_with_master;
+	int at_logout_event;
+	int homunculus_starving_rate;
+	int homunculus_starving_delay;
+	int drop_connection_on_quit;
+	int mob_spawn_variance;
 
 #include "../custom/battle_config_struct.inc"
 };

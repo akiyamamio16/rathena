@@ -489,8 +489,6 @@ int map_moveblock(struct block_list *bl, int x1, int y1, t_tick tick)
 					skill_unit_move_unit_group(skill_id2group(sc->data[SC_WARM]->val4), bl->m, x1-x0, y1-y0);
 				if (sc->data[SC_BANDING])
 					skill_unit_move_unit_group(skill_id2group(sc->data[SC_BANDING]->val4), bl->m, x1-x0, y1-y0);
-				if (sc->data[SC_HELLS_PLANT])
-					skill_unit_move_unit_group(skill_id2group(sc->data[SC_HELLS_PLANT]->val4), bl->m, x1-x0, y1-y0);
 
 				if (sc->data[SC_NEUTRALBARRIER_MASTER])
 					skill_unit_move_unit_group(skill_id2group(sc->data[SC_NEUTRALBARRIER_MASTER]->val2), bl->m, x1-x0, y1-y0);
@@ -1422,7 +1420,7 @@ int map_foreachindir(int(*func)(struct block_list*, va_list), int16 m, int16 x0,
 						rx = (bl->x - x0);
 						ry = (bl->y - y0);
 						//Do not hit source cell
-						if (rx == 0 && ry == 0)
+						if (battle_config.skill_eightpath_same_cell == 0 && rx == 0 && ry == 0)
 							continue;
 						//This turns it so that the area that is hit is always with positive rx and ry
 						rx *= dx;
@@ -1458,7 +1456,7 @@ int map_foreachindir(int(*func)(struct block_list*, va_list), int16 m, int16 x0,
 						rx = (bl->x - x0);
 						ry = (bl->y - y0);
 						//Do not hit source cell
-						if (rx == 0 && ry == 0)
+						if (battle_config.skill_eightpath_same_cell == 0 && rx == 0 && ry == 0)
 							continue;
 						//This turns it so that the area that is hit is always with positive rx and ry
 						rx *= dx;
@@ -1843,7 +1841,7 @@ int map_addflooritem(struct item *item, int amount, int16 m, int16 x, int16 y, i
 
 	nullpo_ret(item);
 
-	if (!(flags&4) && battle_config.item_onfloor && (itemdb_traderight(item->nameid)&1))
+	if (!(flags&4) && battle_config.item_onfloor && (itemdb_traderight(item->nameid).trade))
 		return 0; //can't be dropped
 
 	if (!map_searchrandfreecell(m,&x,&y,flags&2?1:0))
@@ -2088,6 +2086,7 @@ int map_quit(struct map_session_data *sd) {
 		status_change_end(&sd->bl, SC_GLORYWOUNDS, INVALID_TIMER);
 		status_change_end(&sd->bl, SC_SOULCOLD, INVALID_TIMER);
 		status_change_end(&sd->bl, SC_HAWKEYES, INVALID_TIMER);
+		status_change_end(&sd->bl, SC_EMERGENCY_MOVE, INVALID_TIMER);
 		status_change_end(&sd->bl, SC_CHASEWALK2, INVALID_TIMER);
 		if(sd->sc.data[SC_PROVOKE] && sd->sc.data[SC_PROVOKE]->timer == INVALID_TIMER)
 			status_change_end(&sd->bl, SC_PROVOKE, INVALID_TIMER); //Infinite provoke ends on logout
@@ -2665,7 +2664,7 @@ bool map_addnpc(int16 m,struct npc_data *nd)
 	}
 	// npcs with trigger area are grouped
 	// 0 < npc_num_warp < npc_num_area < npc_num
-	if (xs < 0 && ys < 0)
+	if (xs < 0 || ys < 0)
 		mapdata->npc[ mapdata->npc_num ] = nd;
 	else {
 		switch (nd->subtype) {
@@ -2928,7 +2927,7 @@ int map_removemobs_sub(struct block_list *bl, va_list ap)
 	if( !battle_config.mob_remove_damaged && md->status.hp < md->status.max_hp )
 		return 0;
 	// is a mvp
-	if( md->db->mexp > 0 )
+	if( md->get_bosstype() == BOSSTYPE_MVP )
 		return 0;
 
 	unit_free(&md->bl,CLR_OUTSIGHT);
@@ -3651,6 +3650,7 @@ void map_flags_init(void){
 
 		mapdata->flag.clear();
 		mapdata->flag.reserve(MF_MAX); // Reserve the bucket size
+		mapdata->drop_list.clear();
 		args.flag_val = 100;
 
 		// additional mapflag data
@@ -3691,10 +3691,6 @@ void map_data_copy(struct map_data *dst_map, struct map_data *src_map) {
 	dst_map->skill_duration.insert(src_map->skill_duration.begin(), src_map->skill_duration.end());
 
 	dst_map->zone = src_map->zone;
-
-	// Mimic questinfo
-	if (!src_map->qi_data.empty())
-		src_map->qi_data = dst_map->qi_data;
 }
 
 /**
@@ -4343,29 +4339,27 @@ int log_sql_init(void)
 
 void map_remove_questinfo(int m, struct npc_data *nd) {
 	struct map_data *mapdata = map_getmapdata(m);
-	struct s_questinfo *qi;
 
 	nullpo_retv(nd);
 	nullpo_retv(mapdata);
 
-	for (int i = 0; i < mapdata->qi_data.size(); i++) {
-		qi = &mapdata->qi_data[i];
-		if (qi && qi->nd == nd) {
-			script_free_code(qi->condition);
-			mapdata->qi_data.erase(mapdata->qi_data.begin() + i);
-		}
-	}
+	util::vector_erase_if_exists(mapdata->qi_npc, nd->bl.id);
+	nd->qi_data.clear();
 }
 
 static void map_free_questinfo(struct map_data *mapdata) {
 	nullpo_retv(mapdata);
 
-	for (const auto &it : mapdata->qi_data) {
-		if (it.condition)
-			script_free_code(it.condition);
+	for (const auto &it : mapdata->qi_npc) {
+		struct npc_data *nd = map_id2nd(it);
+
+		if (!nd || nd->qi_data.empty())
+			continue;
+
+		nd->qi_data.clear();
 	}
 
-	mapdata->qi_data.clear();
+	mapdata->qi_npc.clear();
 }
 
 /**
@@ -4876,6 +4870,10 @@ void do_final(void){
 		map_quit(sd);
 	mapit_free(iter);
 
+	for (int i = 0; i < map_num; i++) {
+		map_free_questinfo(map_getmapdata(i));
+	}
+
 	/* prepares npcs for a faster shutdown process */
 	do_clear_npc();
 
@@ -4939,7 +4937,6 @@ void do_final(void){
 			for (int j=0; j<MAX_MOB_LIST_PER_MAP; j++)
 				if (mapdata->moblist[j]) aFree(mapdata->moblist[j]);
 		}
-		map_free_questinfo(mapdata);
 		mapdata->damage_adjust = {};
 	}
 
