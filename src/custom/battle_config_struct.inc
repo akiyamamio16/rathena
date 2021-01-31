@@ -12,3 +12,4 @@
  *	 <datatype> name;
  **/
 
+	int mvp_nearwarp;

@@ -11,3 +11,4 @@
  *	 { "name", &battle_config.<variable name>, <default value>, <minimum value>, <maximum value> },
  **/
 
+	{ "mvp_nearwarp",                      &battle_config.mvp_nearwarp,                   14,      0,      100,              },

@@ -1734,6 +1734,9 @@ static bool mob_ai_sub_hard(struct mob_data *md, t_tick tick)
 	if (md->target_id)
 	{	//Check validity of current target. [Skotlex]
 		tbl = map_id2bl(md->target_id);
+		if( battle_config.mvp_nearwarp && !map_getmapflag(md->bl.m, MF_MONSTER_NOTELEPORT) &&
+			status_has_mode(&md->status,MD_MVP) && npc_check_areanpc(1,md->bl.m,md->bl.x,md->bl.y,battle_config.mvp_nearwarp))
+				unit_warp(&md->bl, -1, -1, -1, CLR_TELEPORT);
 		if (!tbl || tbl->m != md->bl.m ||
 			(md->ud.attacktimer == INVALID_TIMER && !status_check_skilluse(&md->bl, tbl, 0, 0)) ||
 			(md->ud.walktimer != INVALID_TIMER && !(battle_config.mob_ai&0x1) && !check_distance_bl(&md->bl, tbl, md->min_chase)) ||
