@@ -187,6 +187,7 @@ struct mob_db {
 	struct view_data vd;
 	unsigned int option;
 	int maxskill;
+	int reflectrate;
 	struct mob_skill skill[MAX_MOBSKILL];
 
 	e_mob_bosstype get_bosstype();

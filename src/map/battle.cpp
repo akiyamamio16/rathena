@@ -7400,6 +7400,13 @@ int64 battle_calc_return_damage(struct block_list* bl, struct block_list *src, i
 			rdamage = damage * sc->data[SC_MAXPAIN]->val1 * 10 / 100;
 	}
 
+	if(src->type == BL_MOB){
+		struct mob_data *md = BL_CAST(BL_MOB,src);
+		int rate;
+		if(rate = md->db->reflectrate)
+			rdamage -= rdamage * rate / 100;
+	}
+	
 	return cap_value(min(rdamage,max_damage),INT_MIN,INT_MAX);
 }
 

@@ -5326,6 +5326,33 @@ static bool mob_readdb_drop(char* str[], int columns, int current) {
 }
 
 /**
+ * Read Reflect damage adjustment db
+ * @author [Haruka Mayumi]
+ **/
+static bool mob_readdb_reflect(char* str[], int columns, int current) {
+	unsigned short mobid;
+	struct mob_db *mob;
+	int rate;
+
+	mobid = atoi(str[0]);
+	if ((mob = mob_db(mobid)) == NULL) {
+		ShowError("mob_reflect_db: Invalid monster ID %s.\n", str[0]);
+		return false;
+	}
+
+	rate = atoi(str[1]);
+	if(rate > 100)
+		rate = 100;
+	else if(rate < 0){
+		ShowError("mob_reflect_db: Invalid reflect percentage for monster ID %s [%d].\n", str[0], rate);
+		return false;
+	}
+	
+	mob->reflectrate = rate;
+	return true;
+}
+
+/**
  * Free drop ratio data
  **/
 static int mob_item_drop_ratio_free(DBKey key, DBData *data, va_list ap) {
@@ -5652,6 +5679,7 @@ static void mob_load(void)
 		sv_readdb(dbsubpath1, "mob_mission.txt", ',', 4, 4, -1, &mob_readdb_group, silent);
 		sv_readdb(dbsubpath1, "mob_classchange.txt", ',', 4, 4, -1, &mob_readdb_group, silent);
 		sv_readdb(dbsubpath2, "mob_drop.txt", ',', 3, 5, -1, &mob_readdb_drop, silent);
+		sv_readdb(dbsubpath2, "mob_reflect_db.txt", ',', 2, 2, -1, &mob_readdb_reflect, silent);
 
 		aFree(dbsubpath1);
 		aFree(dbsubpath2);

@@ -1,0 +1,12 @@
+// Monster Reflect Damage Adjustment
+//
+// Structure of Database:
+// Monster ID, Reflect adjustment %(1-100)
+//
+// Notes:
+//  	Reduce Damage is a percentage between 1 and 100.
+//		Adjusting it greater than or equal to 100 will stop the reflect damage
+//
+// Examples:
+// 1002,30 // Reduce reflect damage to poring by 30%
+1717,50	//Ferus 50% reduce reflect
