@@ -7279,7 +7279,9 @@ int pc_checkjoblevelup(struct map_session_data *sd)
 */
 static void pc_calcexp(struct map_session_data *sd, t_exp *base_exp, t_exp *job_exp, struct block_list *src)
 {
-	int bonus = 0, vip_bonus_base = 0, vip_bonus_job = 0;
+	int bonus = 0, vip_bonus_base = 0, vip_bonus_job = 0, sc_bonus = 0;
+	unsigned int sc_bexp = 0, sc_jexp = 0;
+
 
 	if (src) {
 		struct status_data *status = status_get_status_data(src);
@@ -7305,22 +7307,24 @@ static void pc_calcexp(struct map_session_data *sd, t_exp *base_exp, t_exp *job_
 
 	// Give EXPBOOST for quests even if src is NULL.
 	if (sd->sc.data[SC_EXPBOOST]) {
-		bonus += sd->sc.data[SC_EXPBOOST]->val1;
+		sc_bonus += sd->sc.data[SC_EXPBOOST]->val1;
 		if (battle_config.vip_bm_increase && pc_isvip(sd)) // Increase Battle Manual EXP rate for VIP
-			bonus += (sd->sc.data[SC_EXPBOOST]->val1 / battle_config.vip_bm_increase);
+			sc_bonus += (sd->sc.data[SC_EXPBOOST]->val1 / battle_config.vip_bm_increase);
 	}
 
 	if (*base_exp) {
-		t_exp exp = (t_exp)(*base_exp + ((double)*base_exp * ((bonus + vip_bonus_base) / 100.)));
+		if(sc_bonus) sc_bexp += (unsigned int)((double)*base_exp/(battle_config.base_exp_rate/100) * sc_bonus/100.);
+		t_exp exp = (t_exp)(*base_exp + sc_bexp + ((double)*base_exp * ((bonus + vip_bonus_base) / 100.)));
 		*base_exp = cap_value(exp, 1, MAX_EXP);
 	}
 
 	// Give JEXPBOOST for quests even if src is NULL.
 	if (sd->sc.data[SC_JEXPBOOST])
-		bonus += sd->sc.data[SC_JEXPBOOST]->val1;
+		sc_bonus += sd->sc.data[SC_JEXPBOOST]->val1;
 
 	if (*job_exp) {
-		t_exp exp = (t_exp)(*job_exp + ((double)*job_exp * ((bonus + vip_bonus_job) / 100.)));
+		if(sc_bonus) sc_jexp += (unsigned int)((double)*job_exp/(battle_config.job_exp_rate/100) * sc_bonus/100.);
+		t_exp exp = (t_exp)(*job_exp + sc_jexp +((double)*job_exp * ((bonus + vip_bonus_job) / 100.)));
 		*job_exp = cap_value(exp, 1, MAX_EXP);
 	}
 
