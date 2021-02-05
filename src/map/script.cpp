@@ -21520,8 +21520,15 @@ BUILDIN_FUNC(setmounting) {
 	} else {
 		if( sd->sc.data[SC_ALL_RIDING] )
 			status_change_end(&sd->bl, SC_ALL_RIDING, INVALID_TIMER); //release mount
-		else
-			sc_start(NULL, &sd->bl, SC_ALL_RIDING, 10000, 1, INFINITE_TICK); //mount
+		else {
+			if( !battle_config.prevent_mount || sd->canmount_tick == 0 || DIFF_TICK(gettick(), sd->canmount_tick) > battle_config.prevent_mount )
+				sc_start(NULL, &sd->bl, SC_ALL_RIDING, 10000, 1, INFINITE_TICK); //mount
+			else {
+				char output[100];
+				safesnprintf(output,sizeof(output),"You recently taken a damage, wait for %d seconds before mounting.",(int)((battle_config.prevent_mount - DIFF_TICK(gettick(), sd->canmount_tick))/1000));
+				clif_messagecolor(&sd->bl, 0xFF0000, output, true, SELF);
+			}
+		}
 		script_pushint(st,1);//in both cases, return 1.
 	}
 	return SCRIPT_CMD_SUCCESS;

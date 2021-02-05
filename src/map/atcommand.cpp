@@ -9326,10 +9326,16 @@ ACMD_FUNC(charcommands) {
 }
 /* for new mounts */
 ACMD_FUNC(mount2) {
-	clif_displaymessage(sd->fd,msg_txt(sd,1362)); // NOTICE: If you crash with mount your LUA is outdated.
 	if (!sd->sc.data[SC_ALL_RIDING]) {
-		clif_displaymessage(sd->fd,msg_txt(sd,1363)); // You have mounted.
-		sc_start(NULL, &sd->bl, SC_ALL_RIDING, 10000, 1, INFINITE_TICK);
+		clif_displaymessage(sd->fd,msg_txt(sd,1362)); // NOTICE: If you crash with mount your LUA is outdated.
+		if( !battle_config.prevent_mount || sd->canmount_tick == 0 || DIFF_TICK(gettick(), sd->canmount_tick) > battle_config.prevent_mount ){
+			clif_displaymessage(sd->fd,msg_txt(sd,1363)); // You have mounted.
+			sc_start(NULL, &sd->bl, SC_ALL_RIDING, 10000, 1, INFINITE_TICK);
+		} else {
+			char output[100];
+			safesnprintf(output,sizeof(output),"You recently taken a damage, wait for %d seconds before mounting.",(int)((battle_config.prevent_mount - DIFF_TICK(gettick(), sd->canmount_tick))/1000));
+			clif_messagecolor(&sd->bl, 0xFF0000, output, true, SELF);
+		}
 	} else {
 		clif_displaymessage(sd->fd,msg_txt(sd,1364)); // You have released your mount.
 		status_change_end(&sd->bl, SC_ALL_RIDING, INVALID_TIMER);

@@ -416,6 +416,7 @@ struct map_session_data {
 	int menuskill_id, menuskill_val, menuskill_val2;
 
 	int invincible_timer;
+	t_tick canmount_tick;
 	t_tick canlog_tick;
 	t_tick canuseitem_tick;	// [Skotlex]
 	t_tick canusecashfood_tick;

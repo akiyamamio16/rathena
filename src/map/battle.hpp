@@ -346,6 +346,7 @@ struct Battle_Config
 	int item_drop_treasure_min,item_drop_treasure_max; //by [Skotlex]
 	int item_drop_adddrop_min,item_drop_adddrop_max; //[Skotlex]
 
+	int prevent_mount;
 	int prevent_logout;	// Added by RoVeRT
 	int prevent_logout_trigger;
 	int land_protector_behavior;

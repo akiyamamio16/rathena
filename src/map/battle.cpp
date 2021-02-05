@@ -8719,6 +8719,7 @@ static const struct _battle_data {
 	{ "item_rate_use_mvp",                  &battle_config.item_rate_use_mvp,               100,    0,      1000000,        },
 	{ "item_rate_adddrop",                  &battle_config.item_rate_adddrop,               100,    0,      1000000,        },
 	{ "item_rate_treasure",                 &battle_config.item_rate_treasure,              100,    0,      1000000,        },
+	{ "prevent_mount",                      &battle_config.prevent_mount,                   10000,  0,      INT_MAX,        },
 	{ "prevent_logout",                     &battle_config.prevent_logout,                  10000,  0,      60000,          },
 	{ "prevent_logout_trigger",             &battle_config.prevent_logout_trigger,          0xE,    0,      0xF,            },
 	{ "alchemist_summon_reward",            &battle_config.alchemist_summon_reward,         1,      0,      2,              },

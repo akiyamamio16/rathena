@@ -8302,6 +8302,12 @@ void pc_damage(struct map_session_data *sd,struct block_list *src,unsigned int h
 	if( sd->status.ele_id > 0 )
 		elemental_set_target(sd,src);
 
+	if( sd->sc.data[SC_ALL_RIDING] )
+		status_change_end(&sd->bl, SC_ALL_RIDING, INVALID_TIMER); //release mount
+	
+	if( battle_config.prevent_mount )
+		sd->canmount_tick = gettick();
+	
 	if(battle_config.prevent_logout_trigger&PLT_DAMAGE)
 		sd->canlog_tick = gettick();
 }
