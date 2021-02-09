@@ -2037,6 +2037,9 @@ int unit_skilluse_id2(struct block_list *src, int target_id, uint16 skill_id, ui
 	} else
 		skill_castend_id(ud->skilltimer,tick,src->id,0);
 
+	if( battle_config.prevent_mount )
+		sd->canmount_tick = gettick();
+	
 	if( sd && battle_config.prevent_logout_trigger&PLT_SKILL )
 		sd->canlog_tick = gettick();
 
@@ -2229,6 +2232,9 @@ int unit_skilluse_pos2( struct block_list *src, short skill_x, short skill_y, ui
 		skill_castend_pos(ud->skilltimer,tick,src->id,0);
 	}
 
+	if( battle_config.prevent_mount )
+		sd->canmount_tick = gettick();
+	
 	if( sd && battle_config.prevent_logout_trigger&PLT_SKILL )
 		sd->canlog_tick = gettick();
 
