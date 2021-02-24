@@ -21387,6 +21387,44 @@ BUILDIN_FUNC(searchstores)
 	searchstore_open(sd, uses, effect);
 	return SCRIPT_CMD_SUCCESS;
 }
+
+BUILDIN_FUNC(searchstores_open)
+{
+	unsigned short effect,item_id = 0,card_id = 0;
+	unsigned int uses;
+	struct map_session_data* sd;
+	unsigned int min=0,max=0;
+
+	if( !script_rid2sd(sd) )
+	{
+		return SCRIPT_CMD_SUCCESS;
+	}
+
+	uses   = script_getnum(st,2);
+	effect = script_getnum(st,3);
+	
+	item_id = script_getnum(st,4);
+	card_id = script_getnum(st,5);
+	
+	min = script_getnum(st,6);
+	max = script_getnum(st,7);
+
+	if( !uses )
+	{
+		ShowError("buildin_searchstores_open: Amount of uses cannot be zero.\n");
+		return SCRIPT_CMD_FAILURE;
+	}
+
+	if( effect > 2 )
+	{
+		ShowError("buildin_searchstores_open: Invalid effect id %hu, specified.\n", effect);
+		return SCRIPT_CMD_FAILURE;
+	}
+
+	searchstore_open_query(sd, uses, effect, item_id, card_id, min, max);
+	return SCRIPT_CMD_SUCCESS;
+}
+
 /// Displays a number as large digital clock.
 /// showdigit <value>[,<type>];
 BUILDIN_FUNC(showdigit)
@@ -25500,6 +25538,7 @@ struct script_function buildin_func[] = {
 	BUILDIN_DEF(pushpc,"ii"),
 	BUILDIN_DEF(buyingstore,"i"),
 	BUILDIN_DEF(searchstores,"ii"),
+	BUILDIN_DEF(searchstores_open,"iiiiii"),
 	BUILDIN_DEF(showdigit,"i?"),
 	// WoE SE
 	BUILDIN_DEF(agitstart2,""),

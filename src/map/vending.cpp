@@ -473,6 +473,56 @@ bool vending_searchall(struct map_session_data* sd, const struct s_search_store_
 	return true;
 }
 
+bool vending_searchall_single(struct map_session_data* sd, const struct s_search_store_search_single* s)
+{
+	int i, c, slot;
+	unsigned int idx, cidx;
+	struct item* it;
+
+	if( !sd->state.vending ) // not vending
+		return true;
+
+	for( idx = 0; idx < s->item_count; idx++ ) {
+		ARR_FIND( 0, sd->vend_num, i, sd->cart.u.items_cart[sd->vending[i].index].nameid == (short)s->item_id );
+		if( i == sd->vend_num ) { // not found
+			continue;
+		}
+		it = &sd->cart.u.items_cart[sd->vending[i].index];
+
+		if( s->min_price && s->min_price > sd->vending[i].value ) { // too low price
+			continue;
+		}
+
+		if( s->max_price && s->max_price < sd->vending[i].value ) { // too high price
+			continue;
+		}
+
+		if( s->card_count ) { // check cards
+			if( itemdb_isspecial(it->card[0]) ) { // something, that is not a carded
+				continue;
+			}
+			slot = itemdb_slots(it->nameid);
+
+			for( c = 0; c < slot && it->card[c]; c ++ ) {
+				ARR_FIND( 0, s->card_count, cidx, s->card_id == it->card[c] );
+				if( cidx != s->card_count ) { // found
+					break;
+				}
+			}
+
+			if( c == slot || !it->card[c] ) { // no card match
+				continue;
+			}
+		}
+
+		if( !searchstore_result(s->search_sd, sd->vender_id, sd->status.account_id, sd->message, it->nameid, sd->vending[i].amount, sd->vending[i].value, it->card, it->refine, it->enchantgrade ) ) { // result set full
+			return false;
+		}
+	}
+
+	return true;
+}
+
 /**
 * Open vending for Autotrader
 * @param sd Player as autotrader

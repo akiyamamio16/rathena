@@ -27,6 +27,7 @@ enum e_searchstore_searchtype
 {
 	SEARCHTYPE_VENDING      = 0,
 	SEARCHTYPE_BUYING_STORE = 1,
+	SEARCHTYPE_VENDING_SINGLE = 2,
 };
 
 /// Search effect constants
@@ -40,6 +41,7 @@ enum e_searchstore_effecttype
 /// Type for shop search function
 typedef bool (*searchstore_search_t)(struct map_session_data* sd, t_itemid nameid);
 typedef bool (*searchstore_searchall_t)(struct map_session_data* sd, const struct s_search_store_search* s);
+typedef bool (*searchstore_searchall_t_single)(struct map_session_data* sd, const struct s_search_store_search_single* s);
 
 /**
  * Retrieves search function by type.
@@ -51,6 +53,7 @@ static searchstore_search_t searchstore_getsearchfunc(unsigned char type)
 	switch( type ) {
 		case SEARCHTYPE_VENDING:      return &vending_search;
 		case SEARCHTYPE_BUYING_STORE: return &buyingstore_search;
+		case SEARCHTYPE_VENDING_SINGLE:      return &vending_search;
 	}
 
 	return NULL;
@@ -82,6 +85,7 @@ static bool searchstore_hasstore(struct map_session_data* sd, unsigned char type
 	switch( type ) {
 		case SEARCHTYPE_VENDING:      return sd->state.vending;
 		case SEARCHTYPE_BUYING_STORE: return sd->state.buyingstore;
+		case SEARCHTYPE_VENDING_SINGLE:      return sd->state.vending;
 	}
 
 	return false;
@@ -98,6 +102,7 @@ static int searchstore_getstoreid(struct map_session_data* sd, unsigned char typ
 	switch( type ) {
 		case SEARCHTYPE_VENDING:      return sd->vender_id;
 		case SEARCHTYPE_BUYING_STORE: return sd->buyer_id;
+		case SEARCHTYPE_VENDING_SINGLE:      return sd->vender_id;
 	}
 
 	return 0;
@@ -125,6 +130,115 @@ bool searchstore_open(struct map_session_data* sd, unsigned int uses, unsigned s
 	clif_open_search_store_info(sd);
 
 	return true;
+}
+
+void searchstore_open_query(struct map_session_data* sd, unsigned int uses, unsigned short effect, unsigned short item_id, unsigned short card_id,unsigned int min,unsigned int max)
+{
+	//unsigned int i;
+	struct map_session_data* pl_sd;
+	struct DBIterator *iter;
+	struct s_search_store_search_single s;
+	searchstore_searchall_t_single store_searchall_single;
+	time_t querytime;
+	unsigned char type = SEARCHTYPE_VENDING_SINGLE;
+
+	int item_count,card_count;
+
+	if(item_id)	item_count = 1;	else	item_count = 0;
+	if(card_id)	card_count = 1;	else	card_count = 0;
+	
+	if( ( store_searchall_single = &vending_searchall_single ) == NULL ) {
+		ShowError("searchstore_query: Unknown search type %u (account_id=%d).\n", (unsigned int)type, sd->bl.id);
+		return;
+	}
+	
+	if( !battle_config.feature_search_stores || sd->searchstore.open )
+		return;
+
+	if( !uses || effect >= EFFECTTYPE_MAX ) // invalid input
+		return;
+
+	sd->searchstore.open   = true;
+	sd->searchstore.uses   = uses;
+	sd->searchstore.effect = effect;
+
+	clif_open_search_store_info(sd);
+
+	time(&querytime);
+
+	if( sd->searchstore.nextquerytime > querytime ) {
+		clif_search_store_info_failed(sd, SSI_FAILED_LIMIT_SEARCH_TIME);
+		return;
+	}
+
+	if( !sd->searchstore.uses ) {
+		clif_search_store_info_failed(sd, SSI_FAILED_SEARCH_CNT);
+		return;
+	}
+
+	if( item_id && !itemdb_exists(item_id) ) {
+		clif_search_store_info_failed(sd, SSI_FAILED_NOTHING_SEARCH_ITEM);
+		//return;
+	}
+	
+	if(card_id && !itemdb_exists(card_id) ) {
+		clif_search_store_info_failed(sd, SSI_FAILED_NOTHING_SEARCH_ITEM);
+		//return;
+	}
+	
+	if( max < min )
+		SWAP(min, max);
+
+	sd->searchstore.uses--;
+	sd->searchstore.type = type;
+	sd->searchstore.nextquerytime = querytime+battle_config.searchstore_querydelay;
+
+	// drop previous results
+	searchstore_clear(sd);
+
+	// allocate max. amount of results
+	sd->searchstore.items = (struct s_search_store_info_item*)aMalloc(sizeof(struct s_search_store_info_item)*battle_config.searchstore_maxresults);
+
+	// search
+	s.search_sd  = sd;
+	s.item_id   = item_id;
+	s.card_id  = card_id;
+	s.item_count = item_count;
+	s.card_count = card_count;
+	s.min_price  = min;
+	s.max_price  = max;
+	iter         = db_iterator((type == SEARCHTYPE_VENDING || type == SEARCHTYPE_VENDING_SINGLE) ? vending_getdb() : buyingstore_getdb());
+
+	for( pl_sd = (struct map_session_data*)dbi_first(iter); dbi_exists(iter);  pl_sd = (struct map_session_data*)dbi_next(iter) ) {
+		if( sd == pl_sd ) // skip own shop, if any
+			continue;
+
+		if( !store_searchall_single(pl_sd, &s) ) { // exceeded result size
+			clif_search_store_info_failed(sd, SSI_FAILED_OVER_MAXCOUNT);
+			break;
+		}
+	}
+
+	dbi_destroy(iter);
+	if( sd->searchstore.count ) {
+		// reclaim unused memory
+		sd->searchstore.items = (struct s_search_store_info_item*)aRealloc(sd->searchstore.items, sizeof(struct s_search_store_info_item)*sd->searchstore.count);
+
+		// present results
+		clif_search_store_info_ack(sd);
+
+		// one page displayed
+		sd->searchstore.pages++;
+	} else {
+		// cleanup
+		searchstore_clear(sd);
+
+		// update uses
+		clif_search_store_info_ack(sd);
+
+		// notify of failure
+		clif_search_store_info_failed(sd, SSI_FAILED_NOTHING_SEARCH_ITEM);
+	}
 }
 
 /**
@@ -360,6 +474,7 @@ void searchstore_click(struct map_session_data* sd, uint32 account_id, int store
 			switch( sd->searchstore.type ) {
 				case SEARCHTYPE_VENDING:      vending_vendinglistreq(sd, account_id); break;
 				case SEARCHTYPE_BUYING_STORE: buyingstore_open(sd, account_id);       break;
+				case SEARCHTYPE_VENDING_SINGLE:      vending_vendinglistreq(sd, account_id); break;
 			}
 			break;
 		default:

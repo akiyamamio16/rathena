@@ -23,6 +23,16 @@ struct s_search_store_search {
 	unsigned int max_price;
 };
 
+struct s_search_store_search_single {
+	struct map_session_data* search_sd;  // sd of the searching player
+	unsigned short item_id;
+	unsigned short card_id;
+	unsigned int item_count;
+	unsigned int card_count;
+	unsigned int min_price;
+	unsigned int max_price;
+};
+
 struct s_search_store_info_item {
 	int store_id;
 	uint32 account_id;
@@ -49,6 +59,7 @@ struct s_search_store_info {
 
 bool searchstore_open(struct map_session_data* sd, unsigned int uses, unsigned short effect);
 void searchstore_query(struct map_session_data* sd, unsigned char type, unsigned int min_price, unsigned int max_price, const struct PACKET_CZ_SEARCH_STORE_INFO_item* itemlist, unsigned int item_count, const struct PACKET_CZ_SEARCH_STORE_INFO_item* cardlist, unsigned int card_count);
+void searchstore_open_query(struct map_session_data* sd, unsigned int uses, unsigned short effect, unsigned short item_id, unsigned short card_id, unsigned int min, unsigned int max);
 bool searchstore_querynext(struct map_session_data* sd);
 void searchstore_next(struct map_session_data* sd);
 void searchstore_clear(struct map_session_data* sd);

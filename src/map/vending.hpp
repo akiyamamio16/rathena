@@ -10,6 +10,7 @@
 
 struct map_session_data;
 struct s_search_store_search;
+struct s_search_store_search_single;
 struct s_autotrader;
 
 struct s_vending {
@@ -30,5 +31,6 @@ void vending_vendinglistreq(struct map_session_data* sd, int id);
 void vending_purchasereq(struct map_session_data* sd, int aid, int uid, const uint8* data, int count);
 bool vending_search(struct map_session_data* sd, t_itemid nameid);
 bool vending_searchall(struct map_session_data* sd, const struct s_search_store_search* s);
+bool vending_searchall_single(struct map_session_data* sd, const struct s_search_store_search_single* s);
 
 #endif /* _VENDING_HPP_ */
