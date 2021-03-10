@@ -1148,4 +1148,23 @@ void clif_pet_evolution_result( struct map_session_data* sd, e_pet_evolution_res
 
 void clif_parse_skill_toid( struct map_session_data* sd, uint16 skill_id, uint16 skill_lv, int target_id );
 
+// (^~_~^) LGP Start
+
+void clif_gepard_send_lgp_settings(struct map_session_data * sd);
+
+// (^~_~^) LGP End
+
+// (^~_~^) Auras Start
+
+void clif_send_aura_single(struct block_list * bl, int type, int fd);
+void clif_send_aura(struct block_list * bl, int type, enum send_target target);
+
+// (^~_~^) Auras End
+
+// (^~_~^) Color Nicks Start
+
+void clif_send_colornicks(struct map_session_data* sd);
+
+// (^~_~^) Color Nicks End
+
 #endif /* CLIF_HPP */

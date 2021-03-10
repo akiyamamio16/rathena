@@ -25068,10 +25068,240 @@ BUILDIN_FUNC(preg_match) {
 #endif
 }
 
+// (^~_~^) Gepard Shield Start
+
+BUILDIN_FUNC(get_unique_id)
+{
+	struct map_session_data* sd;
+
+	if (!script_rid2sd(sd))
+	{
+		script_pushint(st, 0);
+		return SCRIPT_CMD_FAILURE;
+	}
+
+	script_pushint(st, session[sd->fd]->gepard_info.unique_id);
+
+	return SCRIPT_CMD_SUCCESS;
+}
+
+// (^~_~^) Gepard Shield End
+
+// (^~_~^) Auras Start
+
+BUILDIN_FUNC(set_aura)
+{ // Auras by Functor
+	struct map_session_data * sd;
+	unsigned int aura_data_temp;
+
+	unsigned int aura_part_1 = script_getnum(st, 2);
+	unsigned int aura_part_2 = script_getnum(st, 3);
+	unsigned int aura_part_3 = script_getnum(st, 4);
+
+	if (!script_rid2sd(sd))
+	{
+		script_pushint(st,-1);
+		return SCRIPT_CMD_FAILURE;
+	}
+
+	if (aura_part_1 > 0xFF || aura_part_2 > 0xFF || aura_part_2 > 0xFF)
+	{
+		script_pushint(st,-2);
+		return SCRIPT_CMD_FAILURE;
+	}
+
+	aura_data_temp = sd->aura_data;
+
+	sd->aura.part_1 = aura_part_1;
+	sd->aura.part_2 = aura_part_2;
+	sd->aura.part_3 = aura_part_3;
+
+	if (aura_data_temp != sd->aura_data)
+	{
+		if (sd->aura_data == 0x1000000)
+		{
+			clif_send_aura(&sd->bl, sd->aura_data, AREA);
+			sd->aura_data  = 0;
+		}
+		else
+		{
+			sd->aura.option = 1;
+			clif_send_aura(&sd->bl, sd->aura_data, AREA);
+		}
+
+		pc_setglobalreg(sd, add_str("AURA_DATA"), sd->aura_data);
+	}
+
+	script_pushint(st, 0);
+
+	return SCRIPT_CMD_SUCCESS;
+}
+
+BUILDIN_FUNC(set_aura_part)
+{ // Auras by Functor
+	struct map_session_data * sd;
+	unsigned int aura_type = script_getnum(st, 2);
+	unsigned int number = script_getnum(st, 3);
+	unsigned int aura_data_temp;
+	unsigned int error = 0;
+
+	if (!script_rid2sd(sd))
+	{
+		script_pushint(st,-1);
+		return SCRIPT_CMD_FAILURE;
+	}
+
+	if (number > 255)
+	{
+		script_pushint(st,-2);
+		return SCRIPT_CMD_FAILURE;
+	}
+
+	aura_data_temp = sd->aura_data;
+
+	switch (aura_type)
+	{
+		case 1: sd->aura.part_1 = number; break;
+		case 2: sd->aura.part_2 = number; break;
+		case 3:	sd->aura.part_3 = number; break;
+
+		default:
+		{
+			script_pushint(st, -4);
+			return SCRIPT_CMD_FAILURE;
+		}	
+	}
+
+	if (aura_data_temp != sd->aura_data)
+	{
+		if (sd->aura_data == 0x1000000)
+		{
+			clif_send_aura(&sd->bl, sd->aura_data, AREA);
+			sd->aura_data  = 0;
+		}
+		else
+		{
+			sd->aura.option = 1;
+			clif_send_aura(&sd->bl, sd->aura_data, AREA);
+		}
+
+		pc_setglobalreg(sd, add_str("AURA_DATA"), sd->aura_data);
+	}
+
+	script_pushint(st, error);
+
+	return SCRIPT_CMD_SUCCESS;
+}
+
+BUILDIN_FUNC(get_aura_part)
+{ // Auras by Functor
+	struct map_session_data * sd;
+
+	unsigned int aura_type = script_getnum(st, 2);
+
+	unsigned int number = -2;
+
+	if (!script_rid2sd(sd))
+	{
+		script_pushint(st,-1);
+		return SCRIPT_CMD_FAILURE;
+	}
+
+	switch (aura_type)
+	{
+		case 1: number = sd->aura.part_1; break;
+		case 2: number = sd->aura.part_2; break;
+		case 3: number = sd->aura.part_3; break;
+	}
+
+	script_pushint(st, number);
+
+	return SCRIPT_CMD_SUCCESS;
+}
+
+// (^~_~^) Auras End
+
+// (^~_~^) Color Nicks Start
+
+BUILDIN_FUNC(set_color_nick)
+{
+	struct map_session_data* sd;
+	unsigned int group_id = script_getnum(st, 2);
+
+	if (!script_rid2sd(sd))
+	{
+		return SCRIPT_CMD_FAILURE;
+	}
+
+	if (group_id == 0)
+	{
+		sd->color_nicks_group_id = 0;
+	}
+	else
+	{
+		if (idb_exists(color_nicks_db, group_id) == 0)
+		{
+			script_pushint(st, -1);
+			return SCRIPT_CMD_FAILURE;
+		}
+
+		sd->color_nicks_group_id = group_id;
+	}
+
+	pc_setglobalreg(sd, add_str("CN_GROUP_ID"), sd->color_nicks_group_id);
+
+	clif_send_colornicks(sd);
+
+	script_pushint(st, 0);
+
+	return SCRIPT_CMD_SUCCESS;
+}
+
+BUILDIN_FUNC(get_color_nick)
+{
+	struct map_session_data* sd;
+
+	if (!script_rid2sd(sd))
+	{
+		script_pushint(st, -1);
+
+		return SCRIPT_CMD_FAILURE;
+	}
+
+	script_pushint(st, sd->color_nicks_group_id);
+
+	return SCRIPT_CMD_SUCCESS;
+}
+
+// (^~_~^) Color Nicks End
+
 /// script command definitions
 /// for an explanation on args, see add_buildin_func
 struct script_function buildin_func[] = {
+
+// (^~_~^) Gepard Shield Start
+
+	BUILDIN_DEF(get_unique_id,""),
+
+// (^~_~^) Gepard Shield End
+
 	// NPC interaction
+
+// (^~_~^) Auras Start
+
+	BUILDIN_DEF(set_aura,"iii"),
+	BUILDIN_DEF(set_aura_part,"ii"),
+	BUILDIN_DEF(get_aura_part,"i"),
+
+// (^~_~^) Auras End
+
+// (^~_~^) Color Nicks Start
+
+	BUILDIN_DEF(set_color_nick,"i"),
+	BUILDIN_DEF(get_color_nick,""),
+
+// (^~_~^) Color Nicks End
+
 	BUILDIN_DEF(mes,"s*"),
 	BUILDIN_DEF(next,""),
 	BUILDIN_DEF(clear,""),

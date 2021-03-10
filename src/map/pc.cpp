@@ -1837,12 +1837,34 @@ void pc_reg_received(struct map_session_data *sd)
 	if (msg_checklangtype(sd->langtype,true) < 0)
 		sd->langtype = 0; //invalid langtype reset to default
 
+// (^~_~^) LGP Start
+
+	if (is_gepard_active == true)
+	{
+		clif_gepard_send_lgp_settings(sd);
+	}
+
+// (^~_~^) LGP End
+
+// (^~_~^) Color Nicks Start
+
+	sd->color_nicks_group_id = static_cast<unsigned int>(pc_readglobalreg(sd, add_str("CN_GROUP_ID")));
+
+// (^~_~^) Color Nicks End
+
 	// Cash shop
 	sd->cashPoints = static_cast<int>(pc_readaccountreg(sd, add_str(CASHPOINT_VAR)));
 	sd->kafraPoints = static_cast<int>(pc_readaccountreg(sd, add_str(KAFRAPOINT_VAR)));
 
 	// Cooking Exp
 	sd->cook_mastery = static_cast<short>(pc_readglobalreg(sd, add_str(COOKMASTERY_VAR)));
+
+// (^~_~^) Auras Start
+
+	sd->aura_data = static_cast<unsigned int>(pc_readglobalreg(sd, add_str("AURA_DATA")));
+	sd->state.show_auras = static_cast<unsigned int>(pc_readglobalreg(sd, add_str("SHOW_AURAS_MODE")));
+
+// (^~_~^) Auras End
 
 	if( (sd->class_&MAPID_BASEMASK) == MAPID_TAEKWON )
 	{ // Better check for class rather than skill to prevent "skill resets" from unsetting this

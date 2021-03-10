@@ -327,6 +327,13 @@ struct map_session_data {
 		unsigned int gmaster_flag : 1;
 		unsigned int prevend : 1;//used to flag wheather you've spent 40sp to open the vending or not.
 		unsigned int warping : 1;//states whether you're in the middle of a warp processing
+
+	// (^~_~^) Auras Start
+
+	unsigned int show_auras : 2;
+
+	// (^~_~^) Auras End
+
 		unsigned int permanent_speed : 1; // When 1, speed cannot be changed through status_calc_pc().
 		bool hold_recalc;
 		unsigned int banking : 1; //1 when we using the banking system 0 when closed
@@ -554,6 +561,12 @@ struct map_session_data {
 	} bonus;
 	// zeroed vars end here.
 
+	// (^~_~^) Color Nicks Start
+
+	unsigned int color_nicks_group_id;
+
+	// (^~_~^) Color Nicks End
+
 	int castrate,delayrate,hprate,sprate,dsprate;
 	int hprecov_rate,sprecov_rate;
 	int matk_rate;
@@ -591,6 +604,23 @@ struct map_session_data {
 	bool party_joining; // whether the char is accepting party invitation
 	int party_invite, party_invite_account; // for handling party invitation (holds party id and account id)
 	int adopt_invite; // Adoption
+
+	// (^~_~^) Auras Start
+
+	union 
+	{ // Auras by Functor
+		struct
+		{
+			unsigned char part_3;
+			unsigned char part_2;
+			unsigned char part_1;
+			unsigned char option;
+		} aura;
+
+		unsigned int aura_data;
+	};
+
+	// (^~_~^) Auras End
 
 	struct guild *guild; // [Ind] speed everything up
 	int guild_invite,guild_invite_account;
